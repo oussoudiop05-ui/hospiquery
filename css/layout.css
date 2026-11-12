@@ -1,0 +1,262 @@
+/* ============================================================
+   layout.css — grille de l'application
+   ------------------------------------------------------------
+   Cinq rangées : barre haute / barre de contexte / scène /
+   poignée / bandeau. Seules la scène et le bandeau défilent.
+   ============================================================ */
+
+.app {
+  --dock-h:286px;
+  height:100%;
+  display:grid;
+  grid-template-rows:auto auto minmax(0,1fr) 5px var(--dock-h);
+  grid-template-columns:minmax(0,1fr);
+}
+
+.app[data-dock="collapsed"] { --dock-h:auto; }
+
+
+/* ---- barre haute ------------------------------------------ */
+
+.topbar {
+  display:flex;
+  align-items:center;
+  gap:var(--sp-4);
+  padding:var(--sp-4) var(--sp-6);
+  background:var(--surface-2);
+  border-bottom:1px solid var(--line-1);
+  min-width:0;
+}
+
+.topbar__brand { display:flex; align-items:baseline; gap:var(--sp-4); flex:none; }
+
+.topbar__name {
+  font-size:var(--fs-15);
+  font-weight:500;
+  letter-spacing:-.012em;
+}
+
+.topbar__tag {
+  font-size:var(--fs-11);
+  color:var(--text-3);
+  white-space:nowrap;
+}
+
+.topbar__tools { display:flex; align-items:center; gap:var(--sp-3); min-width:0; }
+
+.topbar__spacer { flex:1 1 auto; min-width:var(--sp-4); }
+
+.topbar__conns { display:flex; align-items:center; gap:var(--sp-2); flex:none; }
+
+.topbar__actions { display:flex; align-items:center; gap:var(--sp-2); flex:none; }
+
+
+/* ---- barre de contexte ------------------------------------ */
+
+.contextbar {
+  display:flex;
+  align-items:center;
+  gap:var(--sp-5);
+  padding:var(--sp-4) var(--sp-6);
+  background:var(--surface-1);
+  border-bottom:1px solid var(--line-1);
+  min-width:0;
+}
+
+.contextbar__request {
+  font-size:var(--fs-12);
+  color:var(--text-1);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  max-width:46ch;
+}
+
+.contextbar__request:empty::before,
+.contextbar__request[data-empty="1"] { color:var(--text-3); }
+
+.contextbar__grain {
+  font-family:var(--font-mono);
+  font-size:var(--fs-11);
+  color:var(--text-2);
+  white-space:nowrap;
+  flex:none;
+}
+
+.contextbar__spacer { flex:1 1 auto; min-width:var(--sp-4); }
+
+
+/* ---- légende ---------------------------------------------- */
+
+.legend {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:var(--sp-2) var(--sp-5);
+  flex:none;
+}
+
+.legend__item {
+  display:flex;
+  align-items:center;
+  gap:var(--sp-3);
+  font-size:var(--fs-11);
+  color:var(--text-2);
+  white-space:nowrap;
+}
+
+.legend__swatch {
+  width:9px; height:9px;
+  border-radius:2px;
+  flex:none;
+  border:1px solid transparent;
+}
+
+
+/* ---- scène (le schéma) ------------------------------------ */
+
+.stage {
+  position:relative;
+  min-width:0;
+  min-height:0;
+  background:var(--surface-0);
+}
+
+.stage__scroll {
+  height:100%;
+  overflow-x:auto;
+  overflow-y:auto;
+  padding:var(--sp-7) var(--sp-6) var(--sp-7);
+}
+
+.stage__flow {
+  display:flex;
+  align-items:flex-start;
+  gap:0;
+  min-width:max-content;
+  min-height:1px;
+}
+
+.stage__flow:empty { display:none; }
+
+.stage__empty {
+  font-size:var(--fs-12);
+  color:var(--text-3);
+  padding:var(--sp-6) 0;
+}
+
+.stage__fade {
+  position:absolute;
+  top:0; bottom:0;
+  width:28px;
+  pointer-events:none;
+  opacity:0;
+  transition:opacity var(--dur-base) var(--ease);
+}
+
+.stage__fade--right {
+  right:0;
+  background:linear-gradient(to right, transparent, var(--surface-0));
+}
+
+.stage[data-overflow="1"] .stage__fade--right { opacity:1; }
+
+
+/* ---- poignée de redimensionnement ------------------------- */
+
+.dock__grip {
+  background:var(--surface-1);
+  border-top:1px solid var(--line-1);
+  border-bottom:1px solid var(--line-1);
+  cursor:ns-resize;
+  position:relative;
+}
+
+.dock__grip::after {
+  content:"";
+  position:absolute;
+  left:50%; top:50%;
+  transform:translate(-50%,-50%);
+  width:34px; height:2px;
+  border-radius:var(--r-pill);
+  background:var(--line-2);
+}
+
+.dock__grip:hover::after, .dock__grip:focus-visible::after { background:var(--accent-line); }
+
+.app[data-dock="collapsed"] .dock__grip { cursor:default; }
+.app[data-dock="collapsed"] .dock__grip::after { opacity:.4; }
+
+
+/* ---- bandeau bas ------------------------------------------ */
+
+.dock {
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr);
+  background:var(--surface-2);
+  min-height:0;
+  min-width:0;
+}
+
+.app[data-dock="collapsed"] .dock { grid-template-rows:auto; }
+.app[data-dock="collapsed"] .dock__body { display:none; }
+
+.dock__tabs {
+  display:flex;
+  align-items:stretch;
+  gap:0;
+  padding:0 var(--sp-6);
+  border-bottom:1px solid var(--line-1);
+  min-width:0;
+  overflow-x:auto;
+}
+
+.dock__tabspacer { flex:1 1 auto; min-width:var(--sp-4); }
+
+.dock__body {
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding:var(--sp-6);
+  min-height:0;
+}
+
+.pane { min-width:0; }
+
+
+/* ---- deux colonnes dans un panneau ------------------------ */
+
+.split {
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:var(--sp-5);
+  align-items:start;
+}
+
+@media (min-width:860px) {
+  .split { grid-template-columns:minmax(0,1fr) 300px; }
+}
+
+
+/* ---- écrans étroits --------------------------------------- */
+
+@media (max-width:860px) {
+  .topbar { flex-wrap:wrap; row-gap:var(--sp-3); }
+  .topbar__spacer { display:none; }
+  .topbar__tag { display:none; }
+  /* les pastilles doivent pouvoir passer à la ligne, sinon elles
+     poussent le corps de page au-delà de la largeur de l'écran */
+  .topbar__tools { flex-wrap:wrap; row-gap:var(--sp-3); }
+  .topbar__brand { width:100%; }
+  .contextbar { flex-wrap:wrap; row-gap:var(--sp-3); }
+  .contextbar__spacer { display:none; }
+  .contextbar__request { max-width:100%; white-space:normal; }
+}
+
+@media (max-width:560px) {
+  .topbar, .contextbar { padding-left:var(--sp-5); padding-right:var(--sp-5); }
+  .stage__scroll { padding-left:var(--sp-5); padding-right:var(--sp-5); }
+  .dock__tabs { padding-left:var(--sp-5); padding-right:var(--sp-5); }
+  .dock__body { padding:var(--sp-5); }
+  .app { --dock-h:240px; }
+  .legend { display:none; }
+}

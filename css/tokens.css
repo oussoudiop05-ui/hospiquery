@@ -1,0 +1,217 @@
+/* ============================================================
+   tokens.css — système de design de HospiQuery
+   ------------------------------------------------------------
+   Deux couches :
+     1. palette brute  — valeurs littérales, identiques dans les deux thèmes
+     2. tokens sémantiques — seuls remappés en thème sombre
+   Aucune couleur littérale ne doit exister ailleurs que dans ce fichier.
+   ============================================================ */
+
+:root {
+
+  /* ---- 1. PALETTE BRUTE ------------------------------------ */
+
+  /* neutres chauds (thème clair : papier) */
+  --paper-0:#FFFFFF; --paper-1:#F7F5F0; --paper-2:#EFEDE5; --paper-3:#E4E1D7;
+  --paper-4:#D2CFC4; --paper-5:#A8A79D;
+
+  /* neutres froids (thème sombre : ardoise) */
+  --slate-0:#141517; --slate-1:#1C1E21; --slate-2:#242729; --slate-3:#2D3134;
+  --slate-4:#3A3E42; --slate-5:#53585C;
+
+  /* encres */
+  --ink-0:#1F201C; --ink-1:#3C3D37; --ink-2:#5C5D56; --ink-3:#86877F;
+  --snow-0:#F2F0E9; --snow-1:#CFCEC6; --snow-2:#A3A49C; --snow-3:#7B7C75;
+
+  /* vert — CORA RECUEIL / con2 / succès */
+  --grn-50:#E7F0DA; --grn-200:#B8D68C; --grn-500:#4A7D18;
+  --grn-700:#2F5A0E; --grn-850:#24400C; --grn-900:#1A2F08;
+
+  /* bleu — DÉCISIONNEL / con1 / information */
+  --blu-50:#E3EEF9; --blu-200:#A6CCEE; --blu-500:#1D6AAE;
+  --blu-700:#0E4477; --blu-850:#0B3259; --blu-900:#082542;
+
+  /* corail — SPIM / DPI / axi */
+  --cor-50:#FAEAE3; --cor-200:#EFB295; --cor-500:#C25629;
+  --cor-700:#8A3718; --cor-850:#642710; --cor-900:#481C0B;
+
+  /* violet — colonne créée */
+  --vio-50:#ECEAFB; --vio-200:#C3BEF2; --vio-500:#574ECB;
+  --vio-700:#39318A; --vio-850:#2A2466; --vio-900:#1E1949;
+
+  /* ambre — colonne modifiée / avertissement */
+  --amb-50:#FAEDD6; --amb-200:#F2C178; --amb-500:#B5731A;
+  --amb-700:#5F3605; --amb-850:#452704; --amb-900:#2F1A02;
+
+  /* sarcelle — colonne agrégée */
+  --tea-50:#DFF3EC; --tea-200:#92DCC2; --tea-500:#0F7A5E;
+  --tea-700:#07503E; --tea-850:#053A2D; --tea-900:#03291F;
+
+  /* terre cuite — accent, table finale, actions */
+  --ter-50:#FAEAE4; --ter-200:#F0A383; --ter-500:#B8471F;
+  --ter-700:#8C3418; --ter-850:#662511; --ter-900:#4A1A0C;
+
+  /* rouge — erreur */
+  --red-50:#FBE9E9; --red-200:#F0A4A4; --red-500:#C33A3A;
+  --red-700:#8E2525; --red-850:#671A1A; --red-900:#4A1212;
+
+
+  /* ---- 2. TOKENS SÉMANTIQUES — thème clair ----------------- */
+
+  --surface-0:var(--paper-1);
+  --surface-1:var(--paper-2);
+  --surface-2:var(--paper-0);
+  --surface-3:var(--paper-0);
+  --surface-sunken:var(--paper-3);
+
+  --text-1:var(--ink-0);
+  --text-2:var(--ink-2);
+  --text-3:var(--ink-3);
+  --text-inv:var(--snow-0);
+
+  --line-1:rgba(31,32,28,.13);
+  --line-2:rgba(31,32,28,.26);
+  --line-3:rgba(31,32,28,.42);
+
+  --scrim:rgba(31,32,28,.44);
+  --shadow-pop:0 8px 28px rgba(31,32,28,.16), 0 2px 6px rgba(31,32,28,.08);
+  --shadow-card:0 1px 2px rgba(31,32,28,.05);
+
+  /* connexions */
+  --c2-bg:var(--grn-50);   --c2-fg:var(--grn-700);  --c2-line:var(--grn-500);
+  --c1-bg:var(--blu-50);   --c1-fg:var(--blu-700);  --c1-line:var(--blu-500);
+  --cx-bg:var(--cor-50);   --cx-fg:var(--cor-700);  --cx-line:var(--cor-500);
+  --loc-bg:var(--paper-2); --loc-fg:var(--ink-1);   --loc-line:var(--paper-5);
+
+  /* provenance des colonnes */
+  --created-bg:var(--vio-50); --created-fg:var(--vio-700); --created-line:var(--vio-500);
+  --modif-bg:var(--amb-50);   --modif-fg:var(--amb-700);   --modif-line:var(--amb-500);
+  --aggr-bg:var(--tea-50);    --aggr-fg:var(--tea-700);    --aggr-line:var(--tea-500);
+
+  /* rôles */
+  --accent-bg:var(--ter-50); --accent-fg:var(--ter-700); --accent-line:var(--ter-500);
+  --warn-bg:var(--amb-50);   --warn-fg:var(--amb-700);   --warn-line:var(--amb-500);
+  --ok-bg:var(--grn-50);     --ok-fg:var(--grn-700);     --ok-line:var(--grn-500);
+  --info-bg:var(--blu-50);   --info-fg:var(--blu-700);   --info-line:var(--blu-500);
+  --err-bg:var(--red-50);    --err-fg:var(--red-700);    --err-line:var(--red-500);
+
+  color-scheme:light;
+
+
+  /* ---- 3. TYPOGRAPHIE -------------------------------------- */
+
+  --font-ui:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono:'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  --fs-10:10px; --fs-11:11px; --fs-12:12px; --fs-13:13px;
+  --fs-15:15px; --fs-18:18px; --fs-22:22px;
+
+  --lh-tight:1.3; --lh-snug:1.45; --lh-base:1.6;
+  --track-caps:.045em;
+
+
+  /* ---- 4. ESPACE ET FORMES --------------------------------- */
+
+  --sp-1:2px; --sp-2:4px; --sp-3:6px; --sp-4:8px;
+  --sp-5:12px; --sp-6:16px; --sp-7:24px; --sp-8:32px;
+
+  --r-sm:4px; --r-md:7px; --r-lg:12px; --r-pill:999px;
+
+  --h-control:30px;
+  --w-card:300px;
+  --w-card-final:324px;
+  --w-join:100px;
+  --h-cols-max:300px;
+
+
+  /* ---- 5. MOUVEMENT ---------------------------------------- */
+
+  --dur-fast:90ms; --dur-base:160ms;
+  --ease:cubic-bezier(.3,.7,.4,1);
+}
+
+
+/* ============================================================
+   THÈME SOMBRE
+   Seuls les tokens sémantiques sont remappés : la palette brute
+   ci-dessus est stable. Les deux blocs sont identiques — l'un
+   pour le réglage système, l'autre pour le choix explicite.
+   ============================================================ */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface-0:var(--slate-0);
+    --surface-1:var(--slate-1);
+    --surface-2:var(--slate-2);
+    --surface-3:var(--slate-3);
+    --surface-sunken:var(--slate-0);
+
+    --text-1:var(--snow-0);
+    --text-2:var(--snow-2);
+    --text-3:var(--snow-3);
+    --text-inv:var(--ink-0);
+
+    --line-1:rgba(242,240,233,.13);
+    --line-2:rgba(242,240,233,.24);
+    --line-3:rgba(242,240,233,.38);
+
+    --scrim:rgba(10,11,12,.66);
+    --shadow-pop:0 10px 32px rgba(0,0,0,.52), 0 2px 8px rgba(0,0,0,.34);
+    --shadow-card:0 1px 2px rgba(0,0,0,.3);
+
+    --c2-bg:var(--grn-850);   --c2-fg:var(--grn-200);  --c2-line:var(--grn-200);
+    --c1-bg:var(--blu-850);   --c1-fg:var(--blu-200);  --c1-line:var(--blu-200);
+    --cx-bg:var(--cor-850);   --cx-fg:var(--cor-200);  --cx-line:var(--cor-200);
+    --loc-bg:var(--slate-3);  --loc-fg:var(--snow-1);  --loc-line:var(--slate-5);
+
+    --created-bg:var(--vio-850); --created-fg:var(--vio-200); --created-line:var(--vio-200);
+    --modif-bg:var(--amb-850);   --modif-fg:var(--amb-200);   --modif-line:var(--amb-200);
+    --aggr-bg:var(--tea-850);    --aggr-fg:var(--tea-200);    --aggr-line:var(--tea-200);
+
+    --accent-bg:var(--ter-850); --accent-fg:var(--ter-200); --accent-line:var(--ter-200);
+    --warn-bg:var(--amb-850);   --warn-fg:var(--amb-200);   --warn-line:var(--amb-200);
+    --ok-bg:var(--grn-850);     --ok-fg:var(--grn-200);     --ok-line:var(--grn-200);
+    --info-bg:var(--blu-850);   --info-fg:var(--blu-200);   --info-line:var(--blu-200);
+    --err-bg:var(--red-850);    --err-fg:var(--red-200);    --err-line:var(--red-200);
+
+    color-scheme:dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --surface-0:var(--slate-0);
+  --surface-1:var(--slate-1);
+  --surface-2:var(--slate-2);
+  --surface-3:var(--slate-3);
+  --surface-sunken:var(--slate-0);
+
+  --text-1:var(--snow-0);
+  --text-2:var(--snow-2);
+  --text-3:var(--snow-3);
+  --text-inv:var(--ink-0);
+
+  --line-1:rgba(242,240,233,.13);
+  --line-2:rgba(242,240,233,.24);
+  --line-3:rgba(242,240,233,.38);
+
+  --scrim:rgba(10,11,12,.66);
+  --shadow-pop:0 10px 32px rgba(0,0,0,.52), 0 2px 8px rgba(0,0,0,.34);
+  --shadow-card:0 1px 2px rgba(0,0,0,.3);
+
+  --c2-bg:var(--grn-850);   --c2-fg:var(--grn-200);  --c2-line:var(--grn-200);
+  --c1-bg:var(--blu-850);   --c1-fg:var(--blu-200);  --c1-line:var(--blu-200);
+  --cx-bg:var(--cor-850);   --cx-fg:var(--cor-200);  --cx-line:var(--cor-200);
+  --loc-bg:var(--slate-3);  --loc-fg:var(--snow-1);  --loc-line:var(--slate-5);
+
+  --created-bg:var(--vio-850); --created-fg:var(--vio-200); --created-line:var(--vio-200);
+  --modif-bg:var(--amb-850);   --modif-fg:var(--amb-200);   --modif-line:var(--amb-200);
+  --aggr-bg:var(--tea-850);    --aggr-fg:var(--tea-200);    --aggr-line:var(--tea-200);
+
+  --accent-bg:var(--ter-850); --accent-fg:var(--ter-200); --accent-line:var(--ter-200);
+  --warn-bg:var(--amb-850);   --warn-fg:var(--amb-200);   --warn-line:var(--amb-200);
+  --ok-bg:var(--grn-850);     --ok-fg:var(--grn-200);     --ok-line:var(--grn-200);
+  --info-bg:var(--blu-850);   --info-fg:var(--blu-200);   --info-line:var(--blu-200);
+  --err-bg:var(--red-850);    --err-fg:var(--red-200);    --err-line:var(--red-200);
+
+  color-scheme:dark;
+}

@@ -1,0 +1,1010 @@
+/* ============================================================
+   components.css — Composants de l'interface HospiQuery
+   Rôle : styles des composants réutilisables (boutons, pastilles,
+   onglets, infobulles, fenêtres modales, notifications).
+   Toutes les couleurs proviennent des jetons définis dans tokens.css.
+   ============================================================ */
+
+
+/* ---------- Bouton de configuration (barre supérieure) ---------- */
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-4);
+  height: var(--h-control);
+  white-space: nowrap;
+}
+.chip:hover { border-color: var(--line-3); background: var(--surface-1); }
+.chip__label { font-size: var(--fs-12); font-weight: 500; color: var(--text-1); }
+.chip__value { font-family: var(--font-mono); font-size: var(--fs-11); color: var(--text-3); }
+
+
+/* ---------- Bouton icône ---------- */
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--h-control);
+  height: var(--h-control);
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  color: var(--text-2);
+}
+.icon-btn:hover { background: var(--surface-1); color: var(--text-1); border-color: var(--line-2); }
+.icon-btn--sm { width: 24px; height: 24px; }
+.icon-btn__glyph { font-size: var(--fs-13); line-height: 1; }
+
+
+/* ---------- Pastille de statut de connexion ---------- */
+
+.conn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-1) var(--sp-4);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-11);
+  color: var(--text-3);
+}
+.conn__dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: currentColor; }
+.conn--on { border-color: var(--line-2); }
+.conn--c2 { color: var(--c2-fg); background: var(--c2-bg); }
+.conn--c1 { color: var(--c1-fg); background: var(--c1-bg); }
+.conn--cx { color: var(--cx-fg); background: var(--cx-bg); }
+
+
+/* ---------- Onglet de panneau inférieur ---------- */
+
+.dtab {
+  padding: var(--sp-4) var(--sp-5);
+  font-size: var(--fs-12);
+  color: var(--text-2);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.dtab[aria-selected="true"] { color: var(--text-1); font-weight: 500; border-bottom-color: var(--accent-line); }
+.dtab:hover:not([aria-selected="true"]) { color: var(--text-1); }
+.dtab__count {
+  font-family: var(--font-mono);
+  font-size: var(--fs-10);
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-pill);
+  margin-left: var(--sp-3);
+}
+
+
+/* ---------- Boutons ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  height: var(--h-control);
+  padding: 0 var(--sp-5);
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-size: var(--fs-12);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--surface-1); border-color: var(--line-3); }
+.btn:active { opacity: .9; }
+
+/* Variante principale : action à mener */
+.btn--primary { background: var(--accent-line); color: var(--text-inv); border-color: transparent; }
+.btn--primary:hover { background: var(--accent-line); border-color: transparent; opacity: .88; }
+
+/* Variante discrète : sans cadre ni fond */
+.btn--ghost { background: transparent; border-color: transparent; }
+.btn--ghost:hover { background: var(--surface-1); border-color: transparent; }
+
+/* Pleine largeur */
+.btn--full { width: 100%; justify-content: center; }
+
+/* Variante danger : action destructive */
+.btn--danger { color: var(--err-fg); border-color: var(--err-line); }
+.btn--danger:hover { border-color: var(--err-line); }
+
+
+/* ---------- Badges (statuts) ---------- */
+
+.badge {
+  display: inline-block;
+  font-size: var(--fs-10);
+  font-weight: 500;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+  line-height: 1.5;
+}
+.badge--ok { background: var(--ok-bg); color: var(--ok-fg); }
+.badge--info { background: var(--info-bg); color: var(--info-fg); }
+.badge--warn { background: var(--warn-bg); color: var(--warn-fg); }
+.badge--err { background: var(--err-bg); color: var(--err-fg); }
+.badge--created { background: var(--created-bg); color: var(--created-fg); }
+.badge--modif { background: var(--modif-bg); color: var(--modif-fg); }
+.badge--aggr { background: var(--aggr-bg); color: var(--aggr-fg); }
+.badge--neutral { background: var(--surface-1); color: var(--text-2); }
+
+
+/* ---------- Champ de formulaire (fenêtre modale) ---------- */
+
+.field { display: block; margin-bottom: var(--sp-5); }
+.field__label { display: block; font-size: var(--fs-11); color: var(--text-2); margin-bottom: var(--sp-3); }
+.field__hint { display: block; font-size: var(--fs-11); color: var(--text-3); margin-top: var(--sp-3); line-height: var(--lh-snug); }
+
+
+/* ---------- Infobulle au survol ---------- */
+
+.tip {
+  position: absolute;
+  width: 252px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-3);
+  border-radius: var(--r-md);
+  padding: var(--sp-4) var(--sp-5);
+  font-size: var(--fs-11);
+  line-height: var(--lh-snug);
+  color: var(--text-2);
+  box-shadow: var(--shadow-pop);
+  z-index: 60;
+  display: none;
+  pointer-events: none;
+  text-align: left;
+  white-space: normal;
+  font-weight: 400;
+}
+.tip b { color: var(--text-1); font-weight: 500; }
+.tip code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-10);
+  background: var(--surface-1);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+}
+.tip__type { display: block; font-family: var(--font-mono); font-size: var(--fs-10); color: var(--text-3); margin-top: var(--sp-2); }
+.tip__why { display: block; margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--line-1); }
+.has-tip { position: relative; }
+.has-tip:hover > .tip,
+.has-tip:focus-within > .tip { display: block; }
+
+
+/* ---------- Ligne d'avertissement ou d'information ---------- */
+
+.wrow {
+  display: flex;
+  gap: var(--sp-4);
+  padding: var(--sp-4) 0;
+  border-bottom: 1px solid var(--line-1);
+  font-size: var(--fs-12);
+  line-height: var(--lh-snug);
+}
+.wrow:last-child { border-bottom: none; }
+.wrow__icon {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  border-radius: var(--r-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-10);
+  font-weight: 500;
+  margin-top: 1px;
+}
+.wrow__text { min-width: 0; color: var(--text-2); }
+.wrow--warn .wrow__icon { background: var(--warn-bg); color: var(--warn-fg); }
+.wrow--info .wrow__icon { background: var(--info-bg); color: var(--info-fg); }
+.wrow--err .wrow__icon { background: var(--err-bg); color: var(--err-fg); }
+.wrow__text code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-11);
+  background: var(--surface-1);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+}
+
+
+/* ---------- Bulle de message (chat) ---------- */
+
+.bubble {
+  background: var(--surface-1);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm) var(--r-lg) var(--r-lg) var(--r-lg);
+  padding: var(--sp-4) var(--sp-5);
+  font-size: var(--fs-12);
+  line-height: var(--lh-base);
+  color: var(--text-1);
+}
+.bubble--me { background: var(--surface-2); border-color: var(--line-1); }
+.bubble code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-11);
+  background: var(--surface-2);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+}
+.msg { margin-bottom: var(--sp-5); }
+.msg__who {
+  font-size: var(--fs-10);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: var(--sp-3);
+}
+
+
+/* ---------- Bloc de code défilant ---------- */
+
+.codeblock {
+  background: var(--surface-1);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-md);
+  padding: var(--sp-5);
+  font-family: var(--font-mono);
+  font-size: var(--fs-11);
+  line-height: var(--lh-base);
+  color: var(--text-1);
+  white-space: pre;
+  overflow-x: auto;
+  max-height: 100%;
+}
+
+
+/* ---------- Panneau simple (volets du dock) ---------- */
+
+.card-plain {
+  background: var(--surface-2);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-lg);
+  padding: var(--sp-5);
+}
+.card-plain__title { font-size: var(--fs-12); font-weight: 500; margin-bottom: var(--sp-4); }
+
+
+/* ---------- Fenêtre modale ---------- */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-6);
+}
+.modal__scrim { position: absolute; inset: 0; background: var(--scrim); }
+.modal__panel {
+  position: relative;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-pop);
+  width: 100%;
+  max-width: 640px;
+  max-height: 84vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+.modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-5);
+  padding: var(--sp-5) var(--sp-6);
+  border-bottom: 1px solid var(--line-1);
+}
+.modal__title { font-size: var(--fs-15); font-weight: 500; }
+.modal__body { padding: var(--sp-6); overflow-y: auto; min-height: 0; }
+.modal__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-4);
+  padding: var(--sp-5) var(--sp-6);
+  border-top: 1px solid var(--line-1);
+}
+.modal__foot:empty { display: none; }
+
+
+/* ---------- Notifications (toasts) ---------- */
+
+.toasts {
+  position: fixed;
+  bottom: var(--sp-6);
+  right: var(--sp-6);
+  z-index: 200;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--sp-4);
+  pointer-events: none;
+  max-width: 340px;
+}
+.toast {
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-pop);
+  padding: var(--sp-4) var(--sp-5);
+  font-size: var(--fs-12);
+  color: var(--text-1);
+  pointer-events: auto;
+}
+.toast--ok { box-shadow: inset 3px 0 0 var(--ok-line), var(--shadow-pop); }
+.toast--warn { box-shadow: inset 3px 0 0 var(--warn-line), var(--shadow-pop); }
+.toast--err { box-shadow: inset 3px 0 0 var(--err-line), var(--shadow-pop); }
+
+
+/* ---------- Message vide ---------- */
+
+.empty-note {
+  font-size: var(--fs-12);
+  color: var(--text-3);
+  padding: var(--sp-6) 0;
+  text-align: left;
+}
+
+
+/* ---------- Script R ---------- */
+
+.script-toolbar {
+  display: flex;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-6);
+  border-bottom: 1px solid var(--border-1);
+  background: var(--surface-1);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.btn--sm {
+  font-size: var(--fs-11);
+  padding: 2px var(--sp-5);
+  height: 22px;
+}
+
+.script-code {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: var(--sp-6);
+  font-family: 'Consolas', 'Cascadia Code', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-1);
+  background: transparent;
+  overflow: auto;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.script-code code {
+  font: inherit;
+  background: none;
+  color: inherit;
+}
+
+#pane-script {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+
+
+/* ---------- Dictionnaire JSON (LOT 6) ---------- */
+
+.dict-intro {
+  font-size: var(--fs-12);
+  color: var(--text-2);
+  line-height: var(--lh-snug);
+  margin-bottom: var(--sp-5);
+}
+
+.dict-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-7) var(--sp-6);
+  border: 2px dashed var(--line-2);
+  border-radius: var(--r-lg);
+  background: var(--surface-1);
+  text-align: center;
+  cursor: default;
+  transition: border-color .15s, background .15s;
+}
+.dict-drop--active {
+  border-color: var(--accent-line);
+  background: var(--surface-2);
+}
+.dict-drop__icon {
+  font-size: var(--fs-11);
+  font-weight: 600;
+  letter-spacing: var(--track-caps);
+  color: var(--accent-line);
+  background: var(--info-bg);
+  padding: var(--sp-3) var(--sp-5);
+  border-radius: var(--r-md);
+}
+.dict-drop__text {
+  font-size: var(--fs-13);
+  font-weight: 500;
+  color: var(--text-1);
+}
+.dict-drop__sub {
+  font-size: var(--fs-12);
+  color: var(--text-3);
+}
+
+/* Rapport d'import */
+.dict-report { }
+.dict-report__intro {
+  font-size: var(--fs-12);
+  color: var(--text-2);
+  margin-bottom: var(--sp-5);
+}
+.dict-report__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-12);
+}
+.dict-report__row:not(:last-child) {
+  border-bottom: 1px solid var(--line-1);
+}
+.dict-report__label {
+  padding: var(--sp-3) var(--sp-4) var(--sp-3) 0;
+  color: var(--text-2);
+  width: 60%;
+}
+.dict-report__value {
+  padding: var(--sp-3) 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-11);
+  color: var(--text-1);
+  text-align: right;
+}
+.dict-report__value--ok  { color: var(--ok-fg); }
+.dict-report__value--warn { color: var(--warn-fg); }
+.dict-report__value--err { color: var(--err-fg); }
+.dict-report__hint {
+  font-size: var(--fs-11);
+  color: var(--text-3);
+  margin-top: var(--sp-5);
+  line-height: var(--lh-snug);
+}
+
+/* Pied de modale avec info a gauche */
+.dict-foot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: var(--sp-5);
+}
+.dict-foot-info {
+  font-size: var(--fs-11);
+  font-family: var(--font-mono);
+  color: var(--ok-fg);
+}
+
+
+/* ============================================================
+   RÉGLAGES (ui-settings.js — LOT 7)
+   ============================================================ */
+
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.settings-heading {
+  font-size: var(--fs-12);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  margin: 0;
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--line-1);
+}
+
+.field-label {
+  font-size: var(--fs-13);
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+.field-hint {
+  font-size: var(--fs-11);
+  color: var(--text-3);
+  line-height: var(--lh-snug);
+  margin: 0;
+}
+
+.input {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  padding: var(--sp-3) var(--sp-4);
+  font-family: var(--font-mono);
+  font-size: var(--fs-13);
+  color: var(--text-1);
+  outline: none;
+  box-sizing: border-box;
+}
+.input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+
+.settings-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.settings-radio {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: var(--fs-13);
+  color: var(--text-1);
+  cursor: pointer;
+}
+
+.settings-test-result {
+  font-size: var(--fs-12);
+  font-family: var(--font-mono);
+  color: var(--text-3);
+  min-height: 1.4em;
+  margin: 0;
+}
+.settings-test-result--ok  { color: var(--ok-fg); }
+.settings-test-result--err { color: var(--err-fg); }
+
+.settings-stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-2) var(--sp-5);
+  font-size: var(--fs-12);
+  margin: 0;
+}
+.settings-stats dt { color: var(--text-3); font-weight: 500; }
+.settings-stats dd { font-family: var(--font-mono); color: var(--text-1); margin: 0; }
+
+.settings-routes {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-12);
+}
+.settings-routes th,
+.settings-routes td { padding: var(--sp-2) var(--sp-3); text-align: left; border-bottom: 1px solid var(--line-1); }
+.settings-routes th { font-weight: 600; color: var(--text-3); font-size: var(--fs-11); text-transform: uppercase; letter-spacing: 0.05em; }
+.route-task { font-family: var(--font-mono); color: var(--text-2); }
+.route-badge {
+  display: inline-block;
+  padding: 1px var(--sp-3);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-11);
+  font-weight: 500;
+  text-transform: uppercase;
+}
+.route-badge--haiku  { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+.route-badge--sonnet { background: color-mix(in srgb, var(--ok-fg) 15%, transparent); color: var(--ok-fg); }
+
+.modal-foot-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: var(--line-2);
+  color: var(--text-2);
+}
+.btn--ghost:hover { background: var(--surface-2); }
+
+/* ============================================================
+   LOT 8 — Panneau Discussion (chat)
+   ============================================================ */
+
+#pane-chat {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* Liste de messages */
+.chat-list {
+  flex: 1 1 0;
+  overflow-y: auto;
+  padding: var(--sp-3) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+/* Bulles */
+.chat-bubble {
+  display: flex;
+  max-width: 86%;
+}
+.chat-bubble--user    { align-self: flex-end; }
+.chat-bubble--assistant { align-self: flex-start; }
+.chat-bubble--system  { align-self: center; }
+
+.chat-bubble__inner {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  font-size: var(--fs-13);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-1);
+}
+
+.chat-bubble--user .chat-bubble__inner {
+  background: var(--accent);
+  color: #fff;
+  border-bottom-right-radius: var(--r-sm);
+}
+
+.chat-bubble--assistant .chat-bubble__inner {
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  border-bottom-left-radius: var(--r-sm);
+}
+
+.chat-bubble--system .chat-bubble__inner {
+  font-style: italic;
+  color: var(--text-3);
+  background: transparent;
+  font-size: var(--fs-12);
+}
+
+/* Curseur clignotant pendant le streaming */
+.chat-bubble__inner.is-streaming::after {
+  content: '▍';
+  display: inline-block;
+  animation: hq-blink 0.8s step-end infinite;
+  margin-left: 2px;
+  opacity: 0.75;
+}
+@keyframes hq-blink {
+  0%, 100% { opacity: 0.75; }
+  50%       { opacity: 0; }
+}
+
+/* Erreur de réponse */
+.chat-bubble__inner.has-error {
+  color: var(--err-fg);
+  font-style: italic;
+}
+
+/* Pied du panneau */
+.chat-footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  border-top: 1px solid var(--line-2);
+  background: var(--surface-2);
+}
+
+/* Barre d'outils (8 étapes + effacer) */
+.chat-toolbar {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.chat-8step {
+  font-size: var(--fs-12);
+  padding: 2px var(--sp-2);
+}
+
+.chat-clear {
+  font-size: var(--fs-12);
+  padding: 2px var(--sp-2);
+  margin-left: auto;
+}
+
+/* Rangée saisie + envoyer */
+.chat-input-row {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: flex-end;
+}
+
+.chat-input {
+  flex: 1 1 auto;
+  resize: none;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-1, var(--surface-2));
+  color: var(--text-1);
+  font-size: var(--fs-13);
+  line-height: 1.4;
+  padding: var(--sp-2) var(--sp-3);
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+.chat-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.chat-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.chat-send {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  font-size: var(--fs-13);
+  padding: var(--sp-2) var(--sp-3);
+  min-width: 2.4rem;
+  line-height: 1.4;
+}
+
+/* ============================================================
+   LOT 9 — Éditeur CLAUDE.md
+   ============================================================ */
+.claudemd-editor {
+  width: 100%;
+  min-height: 200px;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: var(--fs-12);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--text-1);
+  margin-top: var(--sp-2);
+  box-sizing: border-box;
+}
+.claudemd-info {
+  font-size: var(--fs-11);
+  color: var(--text-3);
+  margin: 0;
+}
+.claudemd-foot {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.claudemd-foot .btn:last-child { margin-left: auto; }
+
+/* ============================================================
+   LOT 9 — Onglet Fichiers externes
+   ============================================================ */
+.files-form {
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  border-bottom: 1px solid var(--line-2);
+}
+.files-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--text-2);
+}
+.form-input {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-size: var(--fs-12);
+  font-family: inherit;
+  box-sizing: border-box;
+  width: 100%;
+}
+.form-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.files-headers {
+  resize: vertical;
+  font-family: var(--font-mono);
+  min-height: 60px;
+}
+.files-list {
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  overflow-y: auto;
+}
+.files-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.files-item__name {
+  font-weight: 500;
+  font-size: var(--fs-12);
+  color: var(--text-1);
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.files-item__type {
+  font-size: var(--fs-11);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+/* ============================================================
+   LOT 10 — Panneau Avertissements
+   ============================================================ */
+.warn-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  border-left: 3px solid var(--warn-fg);
+  background: var(--surface-2);
+  margin-bottom: var(--sp-2);
+  font-size: var(--fs-12);
+}
+.warn-item--info {
+  border-left-color: var(--accent);
+}
+.warn-item__label {
+  font-weight: 500;
+  color: var(--text-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-11);
+}
+.warn-item__msg {
+  color: var(--warn-fg);
+}
+.warn-item--info .warn-item__msg {
+  color: var(--accent);
+}
+.warn-item__detail {
+  color: var(--text-3);
+  font-size: var(--fs-11);
+  font-family: var(--font-mono);
+}
+
+/* ============================================================
+   LOT 10 — Modale Modèles & Historique
+   ============================================================ */
+.tpl-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding: var(--sp-3);
+}
+.tpl-section-title {
+  font-size: var(--fs-13);
+  font-weight: 500;
+  color: var(--text-1);
+  margin: 0 0 var(--sp-3);
+}
+.tpl-btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.tpl-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  padding: var(--sp-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--text-1);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.tpl-btn:hover,
+.tpl-btn:focus-visible {
+  border-color: var(--accent);
+  background: var(--surface-1, var(--surface-2));
+}
+.tpl-btn__title {
+  font-weight: 500;
+  font-size: var(--fs-13);
+}
+.tpl-btn__desc {
+  font-size: var(--fs-11);
+  color: var(--text-3);
+}
+
+/* ============================================================
+   LOT 10 — Historique des extractions
+   ============================================================ */
+.hist-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.hist-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.hist-item__info {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hist-item__title {
+  font-size: var(--fs-12);
+  font-weight: 500;
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hist-item__ts {
+  font-size: var(--fs-11);
+  color: var(--text-3);
+}
+
+/* ============================================================
+   LOT 10 — Accessibilité : focus-visible et mouvement réduit
+   ============================================================ */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
