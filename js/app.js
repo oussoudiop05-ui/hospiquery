@@ -387,6 +387,11 @@
         s.joins      = [];
         s.warnings   = [];
       });
+      /* Vider le panneau Discussion */
+      if (HQ.renderChat && HQ.renderChat.reset) HQ.renderChat.reset();
+      /* Vider le panneau Script R */
+      var scriptPane = byId('pane-script');
+      if (scriptPane) D.clear(scriptPane);
       toast('Nouvelle extraction', 'ok');
     });
   }
