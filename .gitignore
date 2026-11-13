@@ -1,0 +1,12 @@
+# Fichiers internes de développement
+PLAN.md
+
+# Systèmes d'exploitation
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Éditeurs
+.vscode/
+*.suo
+*.user

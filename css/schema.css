@@ -1,0 +1,704 @@
+/* ============================================================
+   schema.css — cartes de tables et colonnes dans la scène
+   LOT 3 : cartes de tables, lignes de colonnes, bulles.
+   LOT 4 : flèches de jointure, nœuds copy_to, branches (fin du fichier).
+   LOT 5 : carte de la table finale (fin du fichier).
+   ============================================================ */
+
+
+/* ---- Grille de flux dans la scène ----------------------- */
+
+.stage__flow {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0;
+  padding: var(--sp-6);
+  min-height: 100%;
+}
+
+
+/* ---- Carte de table ------------------------------------- */
+
+.flow-card {
+  flex: none;
+  width: 300px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* En-tête coloré par connexion */
+.flow-card__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--line-1);
+  cursor: default;
+}
+
+.flow-card--c2 .flow-card__head { background: var(--c2-bg); border-bottom-color: var(--c2-line); }
+.flow-card--c1 .flow-card__head { background: var(--c1-bg); border-bottom-color: var(--c1-line); }
+.flow-card--cx .flow-card__head { background: var(--cx-bg); border-bottom-color: var(--cx-line); }
+
+/* Ligne supérieure : nom de table + compteur + badges */
+.flow-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.flow-card__name {
+  font-family: var(--font-mono);
+  font-size: var(--fs-13);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.flow-card--c2 .flow-card__name { color: var(--c2-fg); }
+.flow-card--c1 .flow-card__name { color: var(--c1-fg); }
+.flow-card--cx .flow-card__name { color: var(--cx-fg); }
+
+.flow-card__count {
+  font-family: var(--font-mono);
+  font-size: var(--fs-10);
+  color: var(--text-3);
+  white-space: nowrap;
+  flex: none;
+}
+
+/* Ligne inférieure : source · grain */
+.flow-card__meta {
+  font-size: var(--fs-11);
+  color: var(--text-2);
+  line-height: var(--lh-snug);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.flow-card--c2 .flow-card__meta { color: var(--grn-500); }
+.flow-card--c1 .flow-card__meta { color: var(--blu-500); }
+.flow-card--cx .flow-card__meta { color: var(--cor-500); }
+
+/* Badges dans l'en-tête : toujours sur leur propre ligne */
+.flow-card__title-row {
+  flex-wrap: wrap;
+}
+.flow-card__badges {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  order: 10;
+  flex: 0 0 100%;
+  margin-top: var(--sp-1);
+}
+
+
+/* ---- Corps de la carte (liste de colonnes) -------------- */
+
+.flow-card__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--sp-2) 0;
+  max-height: 340px;
+}
+
+/* Séparateur visuel : colonnes recommandées / optionnelles */
+.flow-card__sep {
+  height: 1px;
+  background: var(--line-1);
+  margin: var(--sp-2) var(--sp-5);
+}
+.flow-card__sep-label {
+  font-size: var(--fs-10);
+  color: var(--text-3);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  padding: var(--sp-2) var(--sp-5) 0;
+}
+
+
+/* ---- Ligne de colonne ----------------------------------- */
+
+.col-row {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4) var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  margin: 0 var(--sp-2);
+  position: relative;
+}
+.col-row:hover { background: var(--surface-1); }
+.col-row--unchecked { opacity: .55; }
+.col-row--unchecked:hover { opacity: 1; }
+
+/* Checkbox */
+.col-row__check {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+  flex: none;
+  accent-color: var(--accent-line);
+}
+
+/* Nom de la colonne + icône clé */
+.col-row__name-wrap {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  position: relative;
+}
+.col-row__name {
+  font-family: var(--font-mono);
+  font-size: var(--fs-11);
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
+  cursor: default;
+}
+.col-row__type {
+  font-size: var(--fs-10);
+  color: var(--text-3);
+  white-space: nowrap;
+  flex: none;
+}
+.col-row__key {
+  font-size: 9px;
+  color: var(--text-3);
+  flex: none;
+  line-height: 1;
+  opacity: .7;
+}
+
+/* Champs filtre / alias */
+.col-row__fields {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+.col-row__input {
+  flex: 1 1 0;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-10);
+  color: var(--text-1);
+  background: var(--surface-1);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-sm);
+  padding: 2px var(--sp-3);
+  height: 20px;
+  transition: border-color .15s;
+}
+.col-row__input:focus {
+  outline: none;
+  border-color: var(--accent-line);
+  background: var(--surface-2);
+}
+.col-row__input:not(:placeholder-shown) {
+  border-color: var(--line-2);
+  background: var(--surface-2);
+}
+.col-row__input::placeholder {
+  color: var(--text-3);
+  font-size: var(--fs-10);
+}
+
+
+/* ---- Infobulle améliorée pour les cartes --------------- */
+
+/* La bulle du nom de colonne sort à droite de la carte */
+.col-row__name-wrap > .tip {
+  left: 100%;
+  top: -4px;
+  margin-left: var(--sp-3);
+  right: auto;
+  min-width: 220px;
+  max-width: 280px;
+  pointer-events: none;
+  /* Évite que la bulle soit coupée par le parent overflow:hidden */
+  position: fixed;
+}
+
+/* La bulle de l'en-tête de carte sort en dessous */
+.flow-card__head > .tip {
+  top: 100%;
+  left: 0;
+  margin-top: var(--sp-2);
+  width: 280px;
+}
+
+/* Les bulles sur les lignes de colonnes utilisent la position fixe
+   calculée par JS (pour éviter le clipping par overflow:auto) */
+.col-tip {
+  position: fixed;
+  width: 240px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-3);
+  border-radius: var(--r-md);
+  padding: var(--sp-4) var(--sp-5);
+  font-size: var(--fs-11);
+  line-height: var(--lh-snug);
+  color: var(--text-2);
+  box-shadow: var(--shadow-pop);
+  z-index: 60;
+  pointer-events: none;
+  text-align: left;
+  white-space: normal;
+}
+.col-tip b { color: var(--text-1); font-weight: 500; }
+.col-tip code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-10);
+  background: var(--surface-1);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+}
+.col-tip__type { display: block; font-family: var(--font-mono); font-size: var(--fs-10); color: var(--text-3); margin-top: var(--sp-2); }
+.col-tip__why  { display: block; margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--line-1); }
+.col-tip__warn { display: block; margin-top: var(--sp-2); color: var(--warn-fg); font-size: var(--fs-10); }
+
+
+/* ---- Badge multiplicateur dans l'en-tête --------------- */
+
+.badge--mult {
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+  border: 1px solid var(--warn-line);
+}
+
+
+/* ---- État vide de la scène ------------------------------ */
+
+.stage__empty {
+  font-size: var(--fs-12);
+  color: var(--text-3);
+  padding: var(--sp-7) var(--sp-6);
+  pointer-events: none;
+}
+
+
+/* ============================================================
+   LOT 4 — jointures, copy_to, branches
+   ============================================================ */
+
+/* ---- Colonne du flux : carte de l'épine + ses branches ---- */
+
+.flow-col {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.flow-branch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+
+/* ---- Bouton « relier » dans l'en-tête de carte ----------- */
+
+.flow-card__add {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: 1;
+  cursor: pointer;
+}
+.flow-card__add:hover { border-color: var(--accent-line); color: var(--accent-fg); }
+.flow-card__add:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 1px; }
+
+
+/* ---- Connecteur horizontal (épine dorsale) --------------- */
+
+.join-h {
+  flex: none;
+  width: var(--w-join);
+  margin-top: 22px;
+  padding: 0 var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.join-h--copy { width: 176px; }
+.join-h--none { margin-top: 30px; }
+
+.join__track {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.join__line {
+  flex: 1 1 auto;
+  min-width: 10px;
+  height: 0;
+  border-top: 1.5px solid var(--line-3);
+  position: relative;
+}
+.join__line--dashed { border-top-style: dashed; }
+
+/* pointe de flèche */
+.join__line--arrow::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  top: -5px;
+  border-left: 7px solid var(--line-3);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
+.join__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.join__labels {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  max-width: 100%;
+  text-align: center;
+}
+
+.join__key {
+  font-family: var(--font-mono);
+  font-size: var(--fs-10);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+  line-height: var(--lh-tight);
+}
+
+.join__via {
+  font-size: var(--fs-10);
+  color: var(--text-3);
+  font-style: italic;
+  line-height: var(--lh-tight);
+}
+
+
+/* ---- Pastille de type de jointure (cliquable) ------------ */
+
+.join__pill {
+  font-family: var(--font-mono);
+  font-size: var(--fs-10);
+  font-weight: 500;
+  letter-spacing: var(--track-caps);
+  padding: var(--sp-1) var(--sp-4);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-3);
+  background: var(--surface-2);
+  color: var(--text-1);
+  cursor: pointer;
+  line-height: 1.4;
+}
+.join__pill:hover { border-color: var(--accent-line); }
+.join__pill:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 1px; }
+
+.join__pill--left,
+.join__pill--right { background: var(--info-bg); color: var(--info-fg); border-color: var(--info-line); }
+.join__pill--full  { background: var(--warn-bg); color: var(--warn-fg); border-color: var(--warn-line); }
+.join__pill--anti  { background: var(--err-bg);  color: var(--err-fg);  border-color: var(--err-line); }
+
+.join__del {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-3);
+  font-size: var(--fs-10);
+  line-height: 1;
+  cursor: pointer;
+}
+.join__del:hover { color: var(--err-fg); border-color: var(--err-line); }
+.join__del:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 1px; }
+
+
+/* ---- Nœud copy_to (bloc en pointillés) ------------------- */
+
+.copy-node {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-4);
+  border: 1.5px dashed var(--loc-line);
+  border-radius: var(--r-md);
+  background: var(--loc-bg);
+  color: var(--loc-fg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-10);
+  line-height: var(--lh-tight);
+  white-space: nowrap;
+  cursor: default;
+}
+.copy-node:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 1px; }
+.copy-node__fn  { font-weight: 500; color: var(--text-1); }
+.copy-node__dir { color: var(--text-2); }
+.copy-node__tmp { color: var(--text-3); }
+
+
+/* ---- Connecteur vertical (branche sous un pivot) --------- */
+
+.join-v {
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-4);
+  padding-left: var(--sp-7);
+  min-height: 76px;
+}
+
+.join-v .join__track {
+  flex-direction: column;
+  width: 12px;
+  flex: none;
+}
+
+.join-v .join__line {
+  width: 0;
+  height: auto;
+  min-width: 0;
+  min-height: 14px;
+  border-top: 0;
+  border-left: 1.5px solid var(--line-3);
+}
+
+.join-v .join__line--arrow::after {
+  right: auto;
+  top: auto;
+  left: -5px;
+  bottom: -1px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 7px solid var(--line-3);
+  border-bottom: 0;
+}
+
+.join__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) 0;
+  min-width: 0;
+}
+.join__side .join__labels { align-items: flex-start; text-align: left; }
+
+
+/* ---- Jointures en boucle (les deux tables déjà placées) -- */
+
+.flow-extras {
+  flex: none;
+  margin-left: var(--sp-6);
+  margin-top: 22px;
+  padding: var(--sp-4) var(--sp-5);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.flow-extras__title {
+  font-size: var(--fs-10);
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+}
+.flow-extras__row { display: flex; align-items: center; gap: var(--sp-3); }
+
+
+/* ---- Modale « ajouter une jointure » --------------------- */
+
+.modal .field select { width: 100%; }
+.aj-keys {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+}
+.aj-branch {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: var(--fs-12);
+  color: var(--text-2);
+}
+.field__hint--warn { color: var(--warn-fg); }
+
+@media (max-width: 520px) {
+  .aj-keys { grid-template-columns: 1fr; }
+}
+
+
+/* ============================================================
+   LOT 5 — Table finale (TB_FINAL)
+   Couleur par origine : neutre = reprise, ambre = modifiée,
+   violet = créée, vert = agrégée.
+   ============================================================ */
+
+.join-h--final .join__key { color: var(--accent-fg); }
+
+.flow-card--final {
+  width: var(--w-card-final);
+  border: 2px solid var(--accent-line);
+}
+.flow-card--final .flow-card__head {
+  background: var(--accent-bg);
+  border-bottom-color: var(--accent-line);
+}
+.flow-card--final .flow-card__name { color: var(--accent-fg); font-weight: 600; }
+
+.final-hint,
+.final-empty {
+  margin: 0;
+  padding: var(--sp-3) var(--sp-5);
+  font-size: var(--fs-11);
+  color: var(--text-3);
+}
+.final-empty { padding: var(--sp-6) var(--sp-5); }
+
+.final-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--sp-4) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.final-col {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 28px;
+  padding: var(--sp-2) var(--sp-4) var(--sp-2) var(--sp-2);
+  border: 1px solid var(--line-1);
+  border-left-width: 3px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--text-1);
+  cursor: default;
+  user-select: none;
+  transition: box-shadow var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.final-col:hover { background: var(--surface-1); }
+.final-col:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 1px; }
+
+.final-col--kept    { border-left-color: var(--line-3); }
+.final-col--modif   { background: var(--modif-bg);   border-color: var(--modif-line);   color: var(--modif-fg); }
+.final-col--created { background: var(--created-bg); border-color: var(--created-line); color: var(--created-fg); }
+.final-col--aggr    { background: var(--aggr-bg);    border-color: var(--aggr-line);    color: var(--aggr-fg); }
+.final-col--modif:hover,
+.final-col--created:hover,
+.final-col--aggr:hover { filter: brightness(.97); }
+
+.final-col__grip {
+  flex: none;
+  width: 18px;
+  text-align: center;
+  font-size: var(--fs-13);
+  line-height: 1;
+  color: var(--text-3);
+  cursor: grab;
+  touch-action: none;      /* le doigt fait glisser la ligne, pas la page */
+  border-radius: var(--r-sm);
+}
+.final-col__grip:hover { color: var(--text-1); background: var(--line-1); }
+
+.final-col__idx {
+  flex: none;
+  min-width: 16px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-10);
+  color: var(--text-3);
+  text-align: right;
+}
+.final-col__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.final-col__src {
+  flex: none;
+  max-width: 40%;
+  font-size: var(--fs-10);
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.final-col--modif .final-col__src,
+.final-col--created .final-col__src,
+.final-col--aggr .final-col__src { color: inherit; opacity: .8; }
+
+.final-col__clash { flex: none; color: var(--warn-fg); font-size: var(--fs-12); }
+.final-col--clash { box-shadow: inset 0 0 0 1px var(--warn-line); }
+
+/* pendant le glisser */
+.final-list.is-sorting { cursor: grabbing; }
+.final-list.is-sorting .final-col__grip { cursor: grabbing; }
+.final-col.is-dragging {
+  box-shadow: var(--shadow-pop);
+  position: relative;
+  z-index: 1;
+  opacity: .92;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .final-col { transition: none; }
+}
+
+/* LOT 9 — carte de fichier local (pointillés) */
+.flow-card--file {
+  border: 2px dashed var(--line-2) !important;
+}
+.flow-card--file .flow-card__head {
+  background: var(--surface-2);
+}

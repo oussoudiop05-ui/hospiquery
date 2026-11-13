@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HospiQuery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/schema.css">
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="topbar__brand">
+      <span class="topbar__name">HospiQuery</span>
+      <span class="topbar__tag">atelier d'extraction PMSI</span>
+    </div>
+
+    <nav class="topbar__tools" aria-label="Configuration">
+      <button type="button" class="chip" id="btn-claudemd" aria-haspopup="dialog">
+        <span class="chip__label">CLAUDE.md</span>
+        <span class="chip__value" id="val-claudemd">non chargé</span>
+      </button>
+      <button type="button" class="chip" id="btn-dictionary" aria-haspopup="dialog">
+        <span class="chip__label">Dictionnaire</span>
+        <span class="chip__value" id="val-dictionary">non chargé</span>
+      </button>
+      <button type="button" class="chip" id="btn-files" aria-haspopup="dialog">
+        <span class="chip__label">Fichiers</span>
+        <span class="chip__value" id="val-files">0</span>
+      </button>
+      <button type="button" class="chip" id="btn-models" aria-haspopup="dialog">
+        <span class="chip__label">Modèles</span>
+      </button>
+    </nav>
+
+    <div class="topbar__spacer"></div>
+
+    <div class="topbar__conns" id="conns" aria-label="État des connexions"></div>
+
+    <div class="topbar__actions">
+      <button type="button" class="icon-btn" id="btn-theme" aria-label="Changer de thème" title="Changer de thème">
+        <span class="icon-btn__glyph" id="glyph-theme" aria-hidden="true">◐</span>
+      </button>
+      <button type="button" class="icon-btn" id="btn-settings" aria-haspopup="dialog" aria-label="Réglages" title="Réglages">
+        <span class="icon-btn__glyph" aria-hidden="true">⚙</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="contextbar">
+    <p class="contextbar__request" id="context-request">Aucune demande en cours</p>
+    <p class="contextbar__grain" id="context-grain"></p>
+    <div class="contextbar__spacer"></div>
+    <ul class="legend" id="legend"></ul>
+    <button type="button" class="chip" id="btn-reset" title="Réinitialiser pour une nouvelle extraction">
+      <span class="chip__label">Nouveau</span>
+    </button>
+  </div>
+
+  <main class="stage" id="stage" aria-label="Schéma de l'extraction">
+    <div class="stage__scroll" id="stage-scroll">
+      <div class="stage__flow" id="flow"></div>
+      <p class="stage__empty" id="stage-empty">
+        Le schéma apparaîtra ici dès qu'une extraction sera décrite.
+      </p>
+    </div>
+    <div class="stage__fade stage__fade--right" aria-hidden="true"></div>
+  </main>
+
+  <div class="dock__grip" id="dock-grip" role="separator" aria-orientation="horizontal"
+       aria-label="Redimensionner le bandeau" tabindex="0"></div>
+
+  <section class="dock" id="dock" aria-label="Atelier">
+    <div class="dock__tabs" role="tablist" id="dock-tabs">
+      <button type="button" class="dtab" role="tab" aria-selected="true"
+              id="tab-chat" aria-controls="pane-chat">Discussion</button>
+      <button type="button" class="dtab" role="tab" aria-selected="false"
+              id="tab-script" aria-controls="pane-script">Script R</button>
+      <button type="button" class="dtab" role="tab" aria-selected="false"
+              id="tab-files" aria-controls="pane-files">Fichiers externes</button>
+      <button type="button" class="dtab" role="tab" aria-selected="false"
+              id="tab-warnings" aria-controls="pane-warnings">
+        Avertissements <span class="dtab__count" id="count-warnings" hidden>0</span>
+      </button>
+      <div class="dock__tabspacer"></div>
+      <button type="button" class="icon-btn icon-btn--sm" id="btn-dock-toggle"
+              aria-label="Replier le bandeau" title="Replier le bandeau">
+        <span class="icon-btn__glyph" id="glyph-dock" aria-hidden="true">▾</span>
+      </button>
+    </div>
+
+    <div class="dock__body" id="dock-body">
+      <div class="pane" role="tabpanel" id="pane-chat" aria-labelledby="tab-chat"></div>
+      <div class="pane" role="tabpanel" id="pane-script" aria-labelledby="tab-script" hidden></div>
+      <div class="pane" role="tabpanel" id="pane-files" aria-labelledby="tab-files" hidden></div>
+      <div class="pane" role="tabpanel" id="pane-warnings" aria-labelledby="tab-warnings" hidden></div>
+    </div>
+  </section>
+
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal__scrim" id="modal-scrim"></div>
+  <div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <header class="modal__head">
+      <h2 class="modal__title" id="modal-title">Titre</h2>
+      <button type="button" class="icon-btn icon-btn--sm" id="modal-close"
+              aria-label="Fermer"><span class="icon-btn__glyph" aria-hidden="true">✕</span></button>
+    </header>
+    <div class="modal__body" id="modal-body"></div>
+    <footer class="modal__foot" id="modal-foot"></footer>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+
+<script src="js/dom.js?v=12"></script>
+<script src="data/seed-i50.js?v=12"></script>
+<script src="js/store.js?v=12"></script>
+<script src="js/joins.js?v=12"></script>
+<script src="js/generator.js?v=12"></script>
+<script src="js/render-schema.js?v=12"></script>
+<script src="js/render-joins.js?v=12"></script>
+<script src="js/render-final.js?v=12"></script>
+<script src="js/dictionary.js?v=12"></script>
+<script src="js/ui-dictionary.js?v=12"></script>
+<script src="js/api.js?v=12"></script>
+<script src="js/ui-settings.js?v=12"></script>
+<script src="js/prompt.js?v=12"></script>
+<script src="js/render-chat.js?v=12"></script>
+<script src="js/ui-claudemd.js?v=12"></script>
+<script src="js/ui-files.js?v=12"></script>
+<script src="js/ui-warnings.js?v=12"></script>
+<script src="js/ui-templates.js?v=12"></script>
+<script src="js/app.js?v=12"></script>
+</body>
+</html>
