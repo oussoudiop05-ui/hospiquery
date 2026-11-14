@@ -10,6 +10,27 @@
   var el = D.el, byId = D.byId, on = D.on;
 
   var app, stage, stageScroll, dock, grip;
+  var flowState = 'IDLE';
+  var closingCadrage = false;
+  var waitingPont = false;
+  var closingPont = false;
+  var FLOW_TRANSITIONS = {
+    IDLE:              ['CADRAGE'],
+    CADRAGE:            ['RECHERCHE_LOCALE', 'IDLE'],
+    RECHERCHE_LOCALE:   ['RESOLUTION_IA', 'CONSTRUCTION_PLAN', 'IDLE'],
+    RESOLUTION_IA:      ['CONSTRUCTION_PLAN', 'IDLE'],
+    CONSTRUCTION_PLAN:  ['REVUE', 'IDLE'],
+    REVUE:              ['CADRAGE', 'SCRIPT', 'IDLE'],
+    SCRIPT:             ['CADRAGE', 'IDLE']
+  };
+
+  function setFlowState(next) {
+    if (!FLOW_TRANSITIONS[flowState] || FLOW_TRANSITIONS[flowState].indexOf(next) < 0) {
+      throw new Error('Transition de parcours invalide : ' + flowState + ' → ' + next);
+    }
+    flowState = next;
+    document.documentElement.dataset.workflow = next;
+  }
 
   /* ========================================================
      THÈME
@@ -58,6 +79,7 @@
       on(tab, 'click', function () {
         if (store.getUI().dockCollapsed) store.setUI({ dockCollapsed: false });
         store.setUI({ activeTab: name });
+        if (name === 'script' && flowState === 'REVUE') setFlowState('SCRIPT');
       });
     });
 
@@ -71,6 +93,7 @@
       var d = ev.key === 'ArrowRight' ? 1 : -1;
       var next = TABS[(i + d + TABS.length) % TABS.length];
       store.setUI({ activeTab: next });
+      if (next === 'script' && flowState === 'REVUE') setFlowState('SCRIPT');
       var t = byId('tab-' + next);
       if (t) t.focus();
       ev.preventDefault();
@@ -214,6 +237,11 @@
   }
 
   function closeModal() {
+    if (flowState === 'CADRAGE' && !closingCadrage) setFlowState('IDLE');
+    if (flowState === 'RESOLUTION_IA' && waitingPont && !closingPont) {
+      waitingPont = false;
+      setFlowState('IDLE');
+    }
     modal.hidden = true;
     D.clear(modalBody);
     D.clear(modalFoot);
@@ -240,6 +268,170 @@
     window.setTimeout(function () {
       if (node.parentNode) node.parentNode.removeChild(node);
     }, ms || 3200);
+  }
+
+  /* ========================================================
+     PARCOURS D'EXTRACTION — CADRAGE LOCAL
+     ======================================================== */
+  function requestCadrage(request) {
+    request = (request || '').trim();
+    if (!request) {
+      toast('Saisissez d’abord une demande d’extraction.', 'warn');
+      return;
+    }
+    if (HQ.renderChat && HQ.renderChat.isStreaming && HQ.renderChat.isStreaming()) {
+      toast('Attendez la fin de la réponse en cours.', 'warn');
+      return;
+    }
+    if (!HQ.dictionary || !HQ.dictionary.isLoaded()) {
+      toast('Chargez le dictionnaire avant de générer un plan d’extraction.', 'warn');
+      return;
+    }
+    if (!HQ.cadrage || !HQ.renderChat || !HQ.renderChat.submitExtraction) {
+      toast('Le module de cadrage n’est pas chargé.', 'err');
+      return;
+    }
+    if (flowState !== 'IDLE' && flowState !== 'REVUE' && flowState !== 'SCRIPT') {
+      toast('Une extraction est déjà en cours.', 'warn');
+      return;
+    }
+
+    var match = HQ.recipes && HQ.recipes.detecter ? HQ.recipes.detecter(request) : null;
+    var hasLocalRecipe = match && match.score > 0.80;
+    if (HQ.api.getMode() === 'local' && !hasLocalRecipe) {
+      toast('Aucune recette locale ne correspond assez précisément. Choisissez un autre mode dans Réglages.', 'warn');
+      return;
+    }
+    if (hasLocalRecipe && HQ.uiRecipes) {
+      setFlowState('CADRAGE');
+      try {
+        HQ.uiRecipes.open(match, request, {
+          onSubmit: function (recipe, output, answers) {
+            setFlowState('RECHERCHE_LOCALE');
+            try {
+              var plan = HQ.planner.construirePlan(output, answers, answers.request);
+              setFlowState('CONSTRUCTION_PLAN');
+              store.patch(function () { return plan; });
+              store.setUI({ activeTab: 'script' });
+              setFlowState('REVUE');
+              setFlowState('SCRIPT');
+              toast('Recette « ' + recipe.libelle + ' » appliquée sans appel API.', 'ok');
+            } catch (e) {
+              setFlowState('IDLE');
+              toast('Erreur de construction de la recette : ' + e.message, 'err');
+            }
+          },
+          onError: function (err) {
+            toast('Recette non applicable : ' + err.message, 'err');
+          }
+        });
+      } catch (e) {
+        setFlowState('IDLE');
+        toast('Impossible d’ouvrir la recette : ' + e.message, 'err');
+      }
+      return;
+    }
+
+    setFlowState('CADRAGE');
+    var form = HQ.cadrage.renderForm(request);
+
+    function submitCadrage() {
+      HQ.cadrage.clearError(form);
+      var result = HQ.cadrage.validate(form);
+      if (!result.valid) {
+        HQ.cadrage.showError(form, result.message);
+        var error = form.querySelector('.cadrage-error');
+        if (error) error.scrollIntoView({ block: 'nearest' });
+        return;
+      }
+
+      var values = result.values;
+      request = values.request;
+      var granularityLabels = {
+        sejour: 'séjour',
+        rss: 'RSS',
+        rum: 'RUM',
+        diagnostic: 'diagnostic',
+        acte: 'acte',
+        patient: 'patient'
+      };
+      closingCadrage = true;
+      closeModal();
+      closingCadrage = false;
+      setFlowState('RECHERCHE_LOCALE');
+
+      store.patch(function (s) {
+        s.request = request;
+        s.granularity = '1 ligne = 1 ' + granularityLabels[values.granularite];
+        s.cadrage = values;
+        return s;
+      });
+
+      var candidates = [];
+      if (HQ.dictionary && HQ.dictionary.isLoaded() &&
+          HQ.retrieval && HQ.retrieval.chercher) {
+        candidates = HQ.retrieval.chercher(request, 5);
+      }
+
+      setFlowState('RESOLUTION_IA');
+      if (HQ.api.getMode() === 'pont') {
+        waitingPont = true;
+        try {
+          HQ.uiPont.demarrer(request, values, candidates, {
+            onApply: function (plan) {
+              waitingPont = false;
+              setFlowState('CONSTRUCTION_PLAN');
+              store.patch(function () { return plan; });
+              store.setUI({ activeTab: 'script' });
+              setFlowState('REVUE');
+              setFlowState('SCRIPT');
+              toast('Plan Claude Code appliqué sans appel API.', 'ok');
+            },
+            onCancel: function () {
+              waitingPont = false;
+              setFlowState('IDLE');
+            },
+            onError: function (err) {
+              toast('Réponse du pont invalide : ' + err.message, 'err');
+            }
+          });
+        } catch (e) {
+          waitingPont = false;
+          setFlowState('IDLE');
+          toast('Impossible d’ouvrir le pont Claude Code : ' + e.message, 'err');
+        }
+        return;
+      }
+
+      HQ.renderChat.submitExtraction(request, values, candidates, {
+        onComplete: function (hasPlan) {
+          if (!hasPlan) {
+            setFlowState('IDLE');
+            return;
+          }
+          setFlowState('CONSTRUCTION_PLAN');
+          setFlowState('REVUE');
+          if (store.getUI().activeTab === 'script') setFlowState('SCRIPT');
+        },
+        onError: function () {
+          setFlowState('IDLE');
+        }
+      });
+    }
+
+    on(form, 'submit', function (ev) {
+      ev.preventDefault();
+      submitCadrage();
+    });
+
+    var cancelBtn = el('button.btn.btn--ghost', {
+      type: 'button', text: 'Annuler', 'data-close': '1'
+    });
+    var submitBtn = el('button.btn.btn--primary', {
+      type: 'button', text: 'Valider le cadrage'
+    });
+    on(submitBtn, 'click', submitCadrage);
+    openModal('Cadrage de l’extraction', form, [cancelBtn, submitBtn]);
   }
 
   /* ========================================================
@@ -380,9 +572,11 @@
     var btn = byId('btn-reset');
     if (!btn) return;
     on(btn, 'click', function () {
+      if (flowState !== 'IDLE') setFlowState('IDLE');
       store.patch(function (s) {
         s.request    = '';
         s.granularity = '';
+        delete s.cadrage;
         s.nodes      = [];
         s.joins      = [];
         s.warnings   = [];
@@ -473,6 +667,7 @@
     modalBody = byId('modal-body');
     modalFoot = byId('modal-foot');
     modalTitle = byId('modal-title');
+    document.documentElement.dataset.workflow = flowState;
 
     renderConnections();
     renderLegend();
@@ -484,7 +679,21 @@
     wireTabs();
     wireDock();
     wireModal();
-    if (HQ.renderChat)    HQ.renderChat.wire(toast);
+    if (HQ.renderChat)    HQ.renderChat.wire(toast, { onRequest: requestCadrage });
+    if (HQ.uiRecipes) {
+      HQ.uiRecipes.wire(openModal, function () {
+        closingCadrage = true;
+        closeModal();
+        closingCadrage = false;
+      });
+    }
+    if (HQ.uiPont) {
+      HQ.uiPont.wire(openModal, function () {
+        closingPont = true;
+        closeModal();
+        closingPont = false;
+      }, toast);
+    }
     if (HQ.uiFiles)       HQ.uiFiles.wire(toast);
     if (HQ.uiWarnings)    HQ.uiWarnings.wire();
     wireReset();
@@ -502,6 +711,7 @@
     applyDock();
 
     HQ.ui = { openModal: openModal, closeModal: closeModal, toast: toast, measureStage: measureStage };
+    HQ.app = { getFlowState: function () { return flowState; } };
   }
 
   if (document.readyState === 'loading') on(document, 'DOMContentLoaded', init);

@@ -613,6 +613,112 @@
 .route-badge--haiku  { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
 .route-badge--sonnet { background: color-mix(in srgb, var(--ok-fg) 15%, transparent); color: var(--ok-fg); }
 
+/* ============================================================
+   CADRAGE LOCAL (LOT 6)
+   ============================================================ */
+
+.cadrage-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.recipe-dialog,
+.pont-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.pont-prompt,
+.pont-response {
+  min-height: 7rem;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: var(--fs-11);
+}
+
+.pont-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+
+.cadrage-intro,
+.cadrage-help {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--fs-11);
+  line-height: var(--lh-snug);
+}
+
+.cadrage-question {
+  min-width: 0;
+  margin: 0;
+  padding: var(--sp-3) 0 0;
+  border: 0;
+  border-top: 1px solid var(--line-1);
+}
+
+.cadrage-question__legend,
+.cadrage-field__label {
+  margin-bottom: var(--sp-2);
+  color: var(--text-1);
+  font-size: var(--fs-12);
+  font-weight: 500;
+}
+
+.cadrage-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.cadrage-input {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.cadrage-date-range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+
+.cadrage-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+}
+
+.cadrage-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 28px;
+  color: var(--text-2);
+  font-size: var(--fs-12);
+  cursor: pointer;
+}
+
+.cadrage-choice input {
+  accent-color: var(--accent);
+}
+
+.cadrage-error {
+  margin: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--err-line);
+  border-radius: var(--r-sm);
+  background: var(--err-bg);
+  color: var(--err-fg);
+  font-size: var(--fs-12);
+}
+
+.cadrage-error[hidden] { display: none; }
+
 .modal-foot-row {
   display: flex;
   align-items: center;

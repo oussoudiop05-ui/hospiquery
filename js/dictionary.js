@@ -103,7 +103,23 @@
       stillSupposed: stillSupposed
     };
 
+    /* déclencher l'index BM25 dès que le dictionnaire est prêt */
+    if (window.HQ && HQ.retrieval && HQ.retrieval.construireIndex) {
+      HQ.retrieval.construireIndex();
+    }
+    if (window.HQ && HQ.joingraph && HQ.joingraph.construire) {
+      HQ.joingraph.construire();
+    }
+
     return _report;
+  }
+
+  function chaqueTable(callback) {
+    if (!_index) return;
+    var names = Object.keys(_index.tablesByName);
+    for (var i = 0; i < names.length; i++) {
+      callback(_index.tablesByName[names[i]]);
+    }
   }
 
   function getTable(name) {
@@ -155,6 +171,7 @@
     getField:       getField,
     getLinks:       getLinks,
     searchTables:   searchTables,
+    chaqueTable:    chaqueTable,
     isLoaded:       isLoaded,
     getStats:       getStats,
     getReport:      getReport,

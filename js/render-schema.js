@@ -108,7 +108,8 @@
       };
     })) + '|' + JSON.stringify((joins || []).map(function (j) {
       return [j.from, j.to, j.type, j.on];
-    }));
+    })) + '|graphe:' +
+      (HQ.joingraph && HQ.joingraph.getVersion ? HQ.joingraph.getVersion() : 0);
   }
 
   /* ============================================================

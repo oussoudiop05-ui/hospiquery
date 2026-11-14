@@ -14,7 +14,12 @@
     var w = [];
 
     (state.nodes || []).forEach(function (n) {
-      if (n.multiplier && n.multiplier.factor) {
+      var existenceOnly = (state.joins || []).some(function (join) {
+        return join.to === n.id && join.type === 'semi';
+      }) && !(state.joins || []).some(function (join) {
+        return join.to === n.id && join.type !== 'semi';
+      });
+      if (n.multiplier && n.multiplier.factor && !existenceOnly) {
         var detail = n.multiplier.reason || '';
         if (n.multiplier.workaround) detail += ' → ' + n.multiplier.workaround;
         w.push({
@@ -35,6 +40,7 @@
     });
 
     (state.joins || []).forEach(function (j) {
+      if (j.type === 'semi') return;
       if (j.reliability === 'q' || j.reliability === 'supposed') {
         var fromN = (state.nodes || []).filter(function (n) { return n.id === j.from; })[0];
         var toN   = (state.nodes || []).filter(function (n) { return n.id === j.to;   })[0];
@@ -46,6 +52,17 @@
           detail: (j.on || []).map(function (p) { return p[0] + ' = ' + p[1]; }).join(', ')
         });
       }
+    });
+
+    (state.warnings || []).forEach(function (warning) {
+      var text = typeof warning === 'string' ? warning : warning && warning.text;
+      if (!text || w.some(function (item) { return item.detail === text; })) return;
+      w.push({
+        level: warning.level === 'info' ? 'info' : 'warn',
+        label: 'Plan d’extraction',
+        msg: text.replace(/^À confirmer\s*:\s*/i, ''),
+        detail: ''
+      });
     });
 
     return w;

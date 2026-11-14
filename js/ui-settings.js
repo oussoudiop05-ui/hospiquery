@@ -35,34 +35,47 @@
       text: 'La clé est stockée dans votre navigateur (localStorage). Elle ne quitte jamais votre machine.'
     });
 
-    /* ---- section endpoint ---- */
-    var endpointDirect = document.createElement('input');
-    endpointDirect.type = 'radio';
-    endpointDirect.name = 'hq-endpoint';
-    endpointDirect.id   = 'ep-direct';
-    endpointDirect.value = 'direct';
+    keyLabel.textContent = 'Clé API (Anthropic ou OmniRoute)';
+    keyHint.textContent = 'La clé est stockée dans ce navigateur. Facultative en mode Local, Pont Claude Code et pour une passerelle OmniRoute sans authentification.';
 
-    var endpointLocal = document.createElement('input');
-    endpointLocal.type = 'radio';
-    endpointLocal.name = 'hq-endpoint';
-    endpointLocal.id   = 'ep-local';
-    endpointLocal.value = 'local';
+    var modeSelect = document.createElement('select');
+    modeSelect.id = 'settings-mode';
+    modeSelect.className = 'field-input';
+    [
+      { value: 'local', label: 'Local — recettes uniquement, hors réseau' },
+      { value: 'omniroute', label: 'OmniRoute — passerelle locale, modèle gratuit' },
+      { value: 'pont', label: 'Pont Claude Code — copier/coller, sans API' },
+      { value: 'api', label: 'API — Anthropic' }
+    ].forEach(function (option) {
+      var item = document.createElement('option');
+      item.value = option.value;
+      item.textContent = option.label;
+      item.selected = option.value === api.getMode();
+      modeSelect.appendChild(item);
+    });
 
-    var curEp = api.getEndpoint();
-    if (curEp === 'local') endpointLocal.checked = true;
-    else endpointDirect.checked = true;
+    var modeHint = el('p.field-hint', {
+      text: 'Les recettes locales sont toujours proposées sans appel réseau. Les autres demandes suivent le mode choisi.'
+    });
+    modeSelect.setAttribute('aria-label', 'Mode de fonctionnement');
+    var modeRow = el('label.cadrage-field', {}, [
+      el('span.cadrage-field__label', { text: 'Mode de fonctionnement' }),
+      modeSelect,
+      modeHint
+    ]);
 
-    var labelDirect = document.createElement('label');
-    labelDirect.setAttribute('for', 'ep-direct');
-    labelDirect.textContent = 'Direct Anthropic';
-
-    var labelLocal = document.createElement('label');
-    labelLocal.setAttribute('for', 'ep-local');
-    labelLocal.textContent = 'Passerelle locale (OmniRoute port 20128)';
-
-    var endpointRow = el('div.settings-radio-group', {}, [
-      el('div.settings-radio', {}, [endpointDirect, labelDirect]),
-      el('div.settings-radio', {}, [endpointLocal, labelLocal])
+    var localModel = document.createElement('input');
+    localModel.type = 'text';
+    localModel.id = 'settings-local-model';
+    localModel.className = 'input';
+    localModel.value = api.getLocalModel();
+    localModel.autocomplete = 'off';
+    var localModelRow = el('label.cadrage-field', {}, [
+      el('span.cadrage-field__label', { text: 'Modèle OmniRoute' }),
+      localModel,
+      el('p.field-hint', {
+        text: 'Par défaut : groq/openai/gpt-oss-120b. L’URL locale est http://localhost:20128.'
+      })
     ]);
 
     /* ---- test de connexion ---- */
@@ -71,17 +84,22 @@
 
     testBtn.addEventListener('click', function () {
       var key = keyInput.value.trim();
-      if (!key) {
+      var mode = modeSelect.value;
+      if (mode === 'local' || mode === 'pont') {
+        testResult.className = 'settings-test-result settings-test-result--ok';
+        testResult.textContent = 'Ce mode ne fait aucun appel réseau.';
+        return;
+      }
+      if (mode === 'api' && !key) {
         testResult.className = 'settings-test-result settings-test-result--err';
         testResult.textContent = 'Renseignez une clé avant de tester.';
         return;
       }
       /* Sauvegarder provisoirement pour que api.call() puisse lire la clé */
       var prevKey = api.getKey();
+      var prevMode = api.getMode();
       api.setKey(key);
-      var isLocal = document.querySelector('input[name="hq-endpoint"]:checked').value === 'local';
-      var prevEp  = api.getEndpoint();
-      api.setEndpoint(isLocal ? 'local' : 'direct');
+      api.setMode(mode);
 
       testResult.className = 'settings-test-result';
       testResult.textContent = '…';
@@ -100,7 +118,7 @@
         testResult.textContent = '✗ ' + e.message;
         /* Restaurer les valeurs précédentes si le test échoue */
         api.setKey(prevKey);
-        api.setEndpoint(prevEp);
+        api.setMode(prevMode);
       }).finally(function () {
         testBtn.disabled = false;
       });
@@ -154,8 +172,9 @@
         keyHint
       ]),
       el('section.settings-section', {}, [
-        el('h3.settings-heading', { text: 'Point d\'accès' }),
-        endpointRow
+        el('h3.settings-heading', { text: 'Mode de fonctionnement' }),
+        modeRow,
+        localModelRow
       ]),
       el('section.settings-section', {}, [
         el('h3.settings-heading', { text: 'Test de connexion' }),
@@ -217,16 +236,23 @@
     saveBtn.addEventListener('click', function () {
       var body    = document.getElementById('modal-body');
       var keyEl   = body && body.querySelector('#settings-key');
-      var checked = body && body.querySelector('input[name="hq-endpoint"]:checked');
+      var modeEl  = body && body.querySelector('#settings-mode');
       if (!keyEl) return;
 
       var key = keyEl.value.trim();
-      var ep  = checked ? checked.value : 'direct';
+      var mode = modeEl ? modeEl.value : 'api';
       var smEl = body && body.querySelector('#settings-sonnet-model');
+      var localModelEl = body && body.querySelector('#settings-local-model');
+      if (localModelEl && !localModelEl.value.trim()) {
+        toast && toast('Renseignez le nom du modèle OmniRoute.', 'warn');
+        localModelEl.focus();
+        return;
+      }
 
       HQ.api.setKey(key);
-      HQ.api.setEndpoint(ep);
+      HQ.api.setMode(mode);
       if (smEl) HQ.api.setSonnetModel(smEl.value);
+      if (localModelEl) HQ.api.setLocalModel(localModelEl.value);
 
       var fullModeEl = body && body.querySelector('#settings-full-claudemd');
       if (fullModeEl) {
@@ -240,7 +266,7 @@
       var valEl = document.getElementById('val-settings');
       if (valEl) valEl.textContent = key ? '✓' : 'non configuré';
 
-      if (toast) toast(key ? 'Réglages enregistrés' : 'Clé effacée', 'ok');
+      if (toast) toast('Réglages enregistrés — mode ' + mode + '.', 'ok');
       closeModal();
     });
 

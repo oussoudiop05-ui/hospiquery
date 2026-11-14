@@ -56,10 +56,16 @@
     if (!HQ.dictionary || !HQ.dictionary.isLoaded()) {
       return 'Dictionnaire non chargé — les informations sur les tables viennent du CLAUDE.md.';
     }
+
+    /* Moteur BM25 disponible → extrait optimisé par pertinence */
+    if (HQ.retrieval && HQ.retrieval.extraitPourPrompt) {
+      return HQ.retrieval.extraitPourPrompt(request, 5);
+    }
+
+    /* Fallback : ancienne recherche par mots-clés (indexOf) */
     var seen = {};
     var tables = [];
 
-    /* Tables déjà dans le schéma en priorité */
     (nodes || []).forEach(function (n) {
       var key = (n.name || '').toUpperCase();
       if (!seen[key]) {
@@ -69,7 +75,6 @@
       }
     });
 
-    /* Mots-clés extraits de la demande */
     var words = (request || '')
       .replace(/[^a-zA-Z0-9_]/g, ' ')
       .split(/\s+/)
@@ -79,10 +84,7 @@
       if (tables.length >= 8) return;
       HQ.dictionary.searchTables(word).forEach(function (t) {
         var key = (t.name || '').toUpperCase();
-        if (!seen[key]) {
-          seen[key] = true;
-          tables.push(t);
-        }
+        if (!seen[key]) { seen[key] = true; tables.push(t); }
       });
     });
 
@@ -112,52 +114,10 @@
     }).join('\n\n');
   }
 
-  /* ---- Instructions de format pour la réponse -------------- */
-  var FORMAT_INSTRUCTIONS = [
-    '## FORMAT DE RÉPONSE',
-    'Commence par ton analyse en français.',
-    'Si ta réponse modifie le schéma d\'extraction, termine par un bloc JSON entre ces balises exactes :',
-    '',
-    '---HQ_STATE_BEGIN---',
-    '{ ... }',
-    '---HQ_STATE_END---',
-    '',
-    '**Mode "full"** — remplace tout l\'état (nouvelle extraction ou refonte complète) :',
-    '{',
-    '  "mode": "full",',
-    '  "request": "Description de l\'extraction",',
-    '  "granularity": "1 ligne = ...",',
-    '  "nodes": [',
-    '    {',
-    '      "id": "n1", "kind": "table", "name": "NOM_TABLE",',
-    '      "schema": "dbo", "conn": "con2", "source": "CORA RECUEIL",',
-    '      "reliability": "ok", "grain": "1 ligne = ...",',
-    '      "multiplier": null, "branchOf": null,',
-    '      "columns": [',
-    '        {"name":"COL","type":"varchar","label":"...","checked":true,"filter":"","alias":"","isKey":false,"note":""}',
-    '      ]',
-    '    }',
-    '  ],',
-    '  "joins": [{"from":"n1","to":"n2","type":"inner","on":[["COL_A","COL_B"]],"note":"..."}],',
-    '  "derived": [],',
-    '  "finalOrder": []',
-    '}',
-    '',
-    '**Mode "patch"** — pour une correction courte (préférer ce mode) :',
-    '{',
-    '  "mode": "patch",',
-    '  "requestUpdate": "...",',
-    '  "nodePatches": [{"nodeId":"n1","columnPatches":[{"name":"MONTANT_GHS","checked":false}]}],',
-    '  "addColumns": [{"nodeId":"n2","column":{"name":"CODE_CMD","checked":true,"type":"varchar","label":"...","filter":"","alias":"","isKey":false,"note":""}}],',
-    '  "joinPatches": [{"from":"n1","to":"n2","type":"left","note":"..."}],',
-    '  "addJoins": [{"from":"n2","to":"n3","type":"left","on":[["ID","ID"]],"note":"..."}]',
-    '}'
-  ].join('\n');
-
   var HARD_RULES = [
     '## RÈGLES ABSOLUES',
     '- Répondre TOUJOURS EN FRANÇAIS.',
-    '- Jamais de jointure sans vérification — déclarer son marqueur ✅/📖/❓.',
+    '- Les jointures sont construites localement depuis les preuves du graphe ; ne jamais en inventer.',
     '- Jamais un multiplicateur de lignes non signalé dans le node (champ "multiplier").',
     '- Toujours filtrer STATUT = \'T\' sur TB_SYNTH_RSS (séjours non terminés exclus).',
     '- trimws() obligatoire sur NO_SEJOUR avant tout join sur IEP.',
@@ -186,8 +146,7 @@
 
     var stableParts = [
       'Tu es l\'assistant DIM/Data Manager de HospiQuery, outil d\'extraction PMSI pour l\'APHM (base HospiTrack, R Studio).',
-      HARD_RULES,
-      FORMAT_INSTRUCTIONS
+      HARD_RULES
     ];
 
     if (useFullMode && claudemd) {
@@ -220,129 +179,52 @@
     return msgs;
   }
 
-  /* ---- Prompt « méthode en 8 étapes » ---------------------- */
-  function buildEightStepText(request) {
-    var req = (request || '').trim() || 'Extraction PMSI (précisez la demande)';
-    return [
-      'Applique la **méthode en 8 étapes** du CLAUDE.md (section 1.1) pour cette demande :',
+  function construirePromptCompact(request, cadrage, candidates) {
+    var lines = [
+      'Tu es assistant DIM/PMSI pour HospiQuery (base HospiTrack, APHM).',
+      'Propose un plan, ne génère pas de code R et n’invente aucune colonne ou jointure.',
       '',
-      '**Demande :** ' + req,
+      'DEMANDE : ' + String(request || '').trim(),
       '',
-      'Présente chaque étape dans l\'ordre (ne code rien, questionne si ambigu) :',
-      '1. Questions de cadrage (période ? champ MCO/SSR/HAD/PSY ? type passage ? granularité ?)',
-      '2. Granularité de la table finale (1 ligne = ?)',
-      '3. Librairies R nécessaires et pourquoi',
-      '4. Connexion(s) à utiliser (con1/con2/con3/axi) et pourquoi',
-      '5. Tables retenues avec marqueur ✅/📖/❓, granularité propre, multiplicateur s\'il y en a un',
-      '6. Colonnes recommandées (Bloc A indispensables) puis additionnelles disponibles (Bloc B)',
-      '7. Enchaînement séquentiel des jointures étape par étape (clé, type, risque, contrôle)',
-      '8. Contrôles qualité attendus et ordre de grandeur',
+      HQ.cadrage.enTexte(cadrage || {}),
       '',
-      'Si tu peux déjà proposer un schéma préliminaire, termine par le bloc HQ_STATE_BEGIN.'
-    ].join('\n');
-  }
-
-  /* ---- Parsing de la réponse de Claude --------------------- */
-  function parseResponse(raw) {
-    var BEGIN = '---HQ_STATE_BEGIN---';
-    var END   = '---HQ_STATE_END---';
-    var iB = raw.indexOf(BEGIN);
-    var iE = raw.indexOf(END);
-    var text  = raw;
-    var patch = null;
-
-    if (iB >= 0 && iE > iB) {
-      text = raw.slice(0, iB).trim();
-      var jsonStr = raw.slice(iB + BEGIN.length, iE).trim();
-      try {
-        patch = JSON.parse(jsonStr);
-      } catch (e) {
-        text += '\n\n⚠️ Bloc état invalide (JSON malformé) — aucune modification du schéma appliquée.';
-      }
+      'TABLES CANDIDATES (vérifie les noms/champs dans cette liste) :'
+    ];
+    var tables = (candidates || []).slice(0, 5);
+    if (!tables.length && HQ.dictionary && HQ.dictionary.isLoaded() &&
+        HQ.retrieval && HQ.retrieval.chercher) {
+      tables = HQ.retrieval.chercher(request, 5);
     }
-
-    return { text: text, patch: patch };
-  }
-
-  /* ---- Application d'un patch à l'état -------------------- */
-  function applyPatch(state, patch) {
-    if (!patch) return state;
-    var s = JSON.parse(JSON.stringify(state));
-
-    if (patch.mode === 'full') {
-      return {
-        request:    patch.request     || s.request,
-        granularity:patch.granularity || s.granularity,
-        nodes:      patch.nodes       || s.nodes,
-        joins:      patch.joins       || s.joins,
-        derived:    patch.derived     || [],
-        finalOrder: patch.finalOrder  || [],
-        warnings:   patch.warnings    || []
-      };
-    }
-
-    if (patch.mode === 'patch') {
-      if (patch.requestUpdate)     s.request     = patch.requestUpdate;
-      if (patch.granularityUpdate) s.granularity = patch.granularityUpdate;
-
-      /* Patcher des colonnes existantes */
-      (patch.nodePatches || []).forEach(function (np) {
-        var node = null;
-        for (var i = 0; i < s.nodes.length; i++) {
-          if (s.nodes[i].id === np.nodeId) { node = s.nodes[i]; break; }
-        }
-        if (!node) return;
-        (np.columnPatches || []).forEach(function (cp) {
-          for (var j = 0; j < node.columns.length; j++) {
-            if (node.columns[j].name === cp.name) {
-              Object.keys(cp).forEach(function (k) {
-                if (k !== 'name') node.columns[j][k] = cp[k];
-              });
-              break;
-            }
-          }
-        });
+    if (!tables.length) lines.push('- Aucune candidate BM25 ; choisir dans le dictionnaire joint.');
+    tables.forEach(function (candidate) {
+      var table = candidate.table || candidate;
+      var fields = (table.fields || []).slice(0, 8).map(function (field) {
+        return field.name + (field.description ? ' (' + field.description.slice(0, 70) + ')' : '');
       });
-
-      /* Ajouter des colonnes */
-      (patch.addColumns || []).forEach(function (ac) {
-        var node = null;
-        for (var i = 0; i < s.nodes.length; i++) {
-          if (s.nodes[i].id === ac.nodeId) { node = s.nodes[i]; break; }
-        }
-        if (!node || !ac.column) return;
-        var exists = node.columns.some(function (c) { return c.name === ac.column.name; });
-        if (!exists) node.columns.push(ac.column);
-      });
-
-      /* Patcher des jointures existantes */
-      (patch.joinPatches || []).forEach(function (jp) {
-        for (var i = 0; i < s.joins.length; i++) {
-          if (s.joins[i].from === jp.from && s.joins[i].to === jp.to) {
-            Object.keys(jp).forEach(function (k) {
-              if (k !== 'from' && k !== 'to') s.joins[i][k] = jp[k];
-            });
-            break;
-          }
-        }
-      });
-
-      /* Ajouter des jointures */
-      (patch.addJoins || []).forEach(function (aj) {
-        var exists = s.joins.some(function (j) { return j.from === aj.from && j.to === aj.to; });
-        if (!exists) s.joins.push(aj);
-      });
-    }
-
-    return s;
+      lines.push('- ' + table.name + (table.description ? ' — ' + table.description.slice(0, 100) : ''));
+      if (fields.length) lines.push('  Champs : ' + fields.join(', '));
+    });
+    lines.push(
+      '',
+      'RÈGLES : STATUT=\'T\' sur TB_SYNTH_RSS ; TYP_PASS selon le cadrage ; ' +
+        'trimws() sur NO_SEJOUR avant jointure sur IEP ; dates SQL AAAAMMJJ ; ' +
+        'signaler multiplicateurs et incertitudes.',
+      'La table de départ doit être la première. Les jointures seront calculées localement.',
+      '',
+      'Réponds uniquement par un objet JSON valide, sans bloc markdown :',
+      '{"granularite":"sejour|rss|rum|diagnostic|acte|patient",' +
+        '"tables":[{"nom":"NOM_TABLE","role":"depart|enrichissement|filtre","pourquoi":"..."}],' +
+        '"filtres":[{"table":"NOM_TABLE","colonne":"COL","operateur":"=|IN|LIKE|BETWEEN|>=|<=|IS NOT NULL","valeur":"..."}],' +
+        '"codes_metier":[{"nomenclature":"CIM10|CCAM|GHM|CMD","motif":"...","libelle":"..."}],' +
+        '"incertitudes":[]}'
+    );
+    return lines.join('\n');
   }
 
   HQ.prompt = {
     buildSystem:        buildSystem,
     buildMessages:      buildMessages,
-    buildEightStepText: buildEightStepText,
-    parseResponse:      parseResponse,
-    applyPatch:         applyPatch,
+    construirePromptCompact: construirePromptCompact,
     getClaudemdText:    getClaudemdText,
     setClaudemdText:    setClaudemdText
   };

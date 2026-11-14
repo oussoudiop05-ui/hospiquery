@@ -32,15 +32,34 @@
 
   var ANTHROPIC_VERSION = '2023-06-01';
   var DIRECT_URL = 'https://api.anthropic.com/v1/messages';
-  var LOCAL_URL  = 'http://localhost:20128/v1/chat/completions';
+  var LOCAL_URL  = '/_omniroute/v1/chat/completions';
 
   /* ---- préférences (localStorage) -------------------------- */
   function getKey()         { try { return localStorage.getItem('hq.apiKey')      || ''; } catch(e) { return ''; } }
   function getEndpoint()    { try { return localStorage.getItem('hq.endpoint')    || 'direct'; } catch(e) { return 'direct'; } }
+  function getMode() {
+    try {
+      var saved = localStorage.getItem('hq.mode');
+      return saved || (getEndpoint() === 'local' ? 'omniroute' : 'api');
+    } catch(e) { return 'api'; }
+  }
   function getSonnetModel() { try { return localStorage.getItem('hq.sonnetModel') || 'claude-sonnet-4-6'; } catch(e) { return 'claude-sonnet-4-6'; } }
+  function getLocalModel()  { try { return localStorage.getItem('hq.localModel')  || 'groq/openai/gpt-oss-120b'; } catch(e) { return 'groq/openai/gpt-oss-120b'; } }
   function setKey(v)        { try { localStorage.setItem('hq.apiKey',   v); } catch(e) {} }
   function setEndpoint(v)   { try { localStorage.setItem('hq.endpoint', v); } catch(e) {} }
+  function setMode(v) {
+    if (['local', 'omniroute', 'pont', 'api'].indexOf(v) < 0) {
+      throw new Error('Mode HospiQuery inconnu : ' + v);
+    }
+    try { localStorage.setItem('hq.mode', v); } catch(e) {}
+    if (v === 'omniroute') setEndpoint('local');
+    else setEndpoint('direct');
+  }
   function setSonnetModel(v){ try { localStorage.setItem('hq.sonnetModel', v); } catch(e) {} }
+  function setLocalModel(v) {
+    if (!v || !String(v).trim()) throw new Error('Le nom du modèle OmniRoute est requis.');
+    try { localStorage.setItem('hq.localModel', String(v).trim()); } catch(e) {}
+  }
 
   /* ---- stats cumulées ------------------------------------- */
   var _stats = { calls: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUSD: 0 };
@@ -68,8 +87,96 @@
     ];
   }
 
+  function _toolChoiceName(opts) {
+    if (opts.forceTool) return opts.forceTool;
+    var choice = opts.tool_choice || opts.toolChoice;
+    if (typeof choice === 'string') return choice;
+    return choice && choice.name || '';
+  }
+
+  function _addAnthropicTools(body, opts) {
+    if (!opts.tools || !opts.tools.length) return;
+    body.tools = opts.tools;
+    var name = _toolChoiceName(opts);
+    if (name) body.tool_choice = { type: 'tool', name: name };
+  }
+
+  function _openAITools(tools) {
+    return tools.map(function (tool) {
+      return {
+        type: 'function',
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.input_schema
+        }
+      };
+    });
+  }
+
+  function _addOpenAITools(body, opts) {
+    if (!opts.tools || !opts.tools.length) return;
+    body.tools = _openAITools(opts.tools);
+    var name = _toolChoiceName(opts);
+    if (name) body.tool_choice = { type: 'function', function: { name: name } };
+  }
+
+  function _anthropicBody(model, opts, streaming) {
+    var body = {
+      model: model,
+      max_tokens: opts.maxTokens || (streaming ? 2048 : 1024),
+      messages: opts.messages,
+      stream: !!streaming
+    };
+    if (opts.system) body.system = _buildSystemBlocks(opts.system);
+    _addAnthropicTools(body, opts);
+    return body;
+  }
+
+  function _openAIBody(model, opts, streaming) {
+    var body = {
+      model: model,
+      max_tokens: opts.maxTokens || (streaming ? 2048 : 1024),
+      messages: _toOpenAI(opts.system, opts.messages),
+      stream: !!streaming
+    };
+    _addOpenAITools(body, opts);
+    return body;
+  }
+
+  function lireToolCall(data, nomOutil) {
+    var choices = data && data.choices;
+    var message = choices && choices[0] && choices[0].message;
+    var calls = message && message.tool_calls || [];
+    for (var i = 0; i < calls.length; i++) {
+      var fn = calls[i].function || {};
+      if (fn.name === nomOutil) return _parseToolInput(fn.arguments);
+    }
+    if (message && message.function_call && message.function_call.name === nomOutil) {
+      return _parseToolInput(message.function_call.arguments);
+    }
+
+    var blocks = data && data.content || [];
+    for (var j = 0; j < blocks.length; j++) {
+      if (blocks[j].type === 'tool_use' && blocks[j].name === nomOutil) {
+        return blocks[j].input;
+      }
+    }
+    return null;
+  }
+
+  function _parseToolInput(input) {
+    if (typeof input !== 'string') return input;
+    try {
+      return JSON.parse(input);
+    } catch (e) {
+      throw new Error('Arguments JSON invalides dans la réponse du tool call.');
+    }
+  }
+
   /* ---- sélection du modèle -------------------------------- */
   function modelFor(task) {
+    if (getEndpoint() === 'local') return getLocalModel();
     var m = ROUTES[task] || 'sonnet';
     if (m === 'sonnet') m = getSonnetModel();
     /* garde-fou : jamais Opus */
@@ -91,25 +198,23 @@
   /* ---- appel direct (sans stream) ------------------------- */
   function call(task, opts) {
     var key = getKey();
-    if (!key) return Promise.reject(new Error('Clé API manquante. Renseignez-la dans les réglages.'));
+    var isLocal = getEndpoint() === 'local';
+    if (!key && !isLocal) return Promise.reject(new Error('Clé API manquante. Renseignez-la dans les réglages.'));
 
     var model    = modelFor(task);
-    var isLocal  = getEndpoint() === 'local';
     var endpoint = isLocal ? LOCAL_URL : DIRECT_URL;
 
     var hdrs = isLocal
-      ? { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key }
+      ? { 'Content-Type': 'application/json' }
       : { 'Content-Type': 'application/json', 'x-api-key': key,
           'anthropic-version': ANTHROPIC_VERSION,
           'anthropic-beta': 'prompt-caching-2024-07-31',
           'anthropic-dangerous-direct-browser-access': 'true' };
+    if (isLocal && key) hdrs.Authorization = 'Bearer ' + key;
 
     var body = isLocal
-      ? { model: model, max_tokens: opts.maxTokens || 1024,
-          messages: _toOpenAI(opts.system, opts.messages), stream: false }
-      : { model: model, max_tokens: opts.maxTokens || 1024,
-          messages: opts.messages, stream: false };
-    if (!isLocal && opts.system) body.system = _buildSystemBlocks(opts.system);
+      ? _openAIBody(model, opts, false)
+      : _anthropicBody(model, opts, false);
 
     var attempt = 0;
     function tryOnce() {
@@ -148,28 +253,26 @@
   /* ---- appel en streaming --------------------------------- */
   function stream(task, opts, onChunk, onDone, onError) {
     var key = getKey();
-    if (!key) {
+    var isLocal = getEndpoint() === 'local';
+    if (!key && !isLocal) {
       if (onError) onError(new Error('Clé API manquante. Renseignez-la dans les réglages.'));
       return;
     }
 
     var model    = modelFor(task);
-    var isLocal  = getEndpoint() === 'local';
     var endpoint = isLocal ? LOCAL_URL : DIRECT_URL;
 
     var hdrs = isLocal
-      ? { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key }
+      ? { 'Content-Type': 'application/json' }
       : { 'Content-Type': 'application/json', 'x-api-key': key,
           'anthropic-version': ANTHROPIC_VERSION,
           'anthropic-beta': 'prompt-caching-2024-07-31',
           'anthropic-dangerous-direct-browser-access': 'true' };
+    if (isLocal && key) hdrs.Authorization = 'Bearer ' + key;
 
     var body = isLocal
-      ? { model: model, max_tokens: opts.maxTokens || 2048,
-          messages: _toOpenAI(opts.system, opts.messages), stream: true }
-      : { model: model, max_tokens: opts.maxTokens || 2048,
-          messages: opts.messages, stream: true };
-    if (!isLocal && opts.system) body.system = _buildSystemBlocks(opts.system);
+      ? _openAIBody(model, opts, true)
+      : _anthropicBody(model, opts, true);
 
     fetch(endpoint, { method: 'POST', headers: hdrs, body: JSON.stringify(body) })
       .then(function(r) {
@@ -244,12 +347,17 @@
     modelFor:       modelFor,
     call:           call,
     stream:         stream,
+    lireToolCall:   lireToolCall,
     getKey:         getKey,
     setKey:         setKey,
     getEndpoint:    getEndpoint,
     setEndpoint:    setEndpoint,
+    getMode:        getMode,
+    setMode:        setMode,
     getSonnetModel: getSonnetModel,
     setSonnetModel: setSonnetModel,
+    getLocalModel:  getLocalModel,
+    setLocalModel:  setLocalModel,
     getStats:       function() { return Object.assign({}, _stats); },
     resetStats:     function() { _stats = { calls: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUSD: 0 }; },
     ROUTES:         ROUTES

@@ -19,6 +19,7 @@
   var _sendBtn   = null;
   var _welcomeEl = null;
   var _toast     = null;
+  var _handlers  = {};
 
   /* ============================================================
      RENDU MARKDOWN
@@ -249,14 +250,27 @@
     text = (text || '').trim();
     if (!text || _streaming) return;
 
+    if (_handlers.onRequest) {
+      _handlers.onRequest(text);
+      return;
+    }
+
+    sendToAssistant(text, text);
+  }
+
+  function sendToAssistant(displayText, userText, callbacks) {
+    displayText = (displayText || '').trim();
+    userText = (userText || displayText).trim();
+    if (!userText || _streaming) return;
+
     if (_inputEl) _inputEl.value = '';
 
-    appendBubble('user', text);
-    _history.push({ role: 'user', content: text });
+    appendBubble('user', displayText);
+    _history.push({ role: 'user', content: userText });
 
     var state  = HQ.store.getState();
     var system = HQ.prompt.buildSystem(state);
-    var msgs   = HQ.prompt.buildMessages(_history.slice(0, -1), text);
+    var msgs   = HQ.prompt.buildMessages(_history.slice(0, -1), userText);
 
     var inner    = appendBubble('assistant', '', true);
     var fullText = '';
@@ -283,8 +297,7 @@
         inner.classList.remove('is-streaming');
         setStreaming(false);
 
-        var parsed      = HQ.prompt.parseResponse(fullText);
-        var displayText = parsed.text;
+        var displayText = fullText.trim();
 
         /* Rendu final : cartes Q&A ou markdown ordinaire */
         if (hasQABlocks(displayText)) {
@@ -303,7 +316,7 @@
             }).join('\n');
             var msg = 'Voici mes réponses aux questions de cadrage :\n\n' + summary
                       + '\n\nProduis maintenant le schéma et le script R complet.';
-            sendMessage(msg);
+            sendToAssistant(msg, msg);
           });
 
           inner.appendChild(qaResult.container);
@@ -313,13 +326,7 @@
 
         _history.push({ role: 'assistant', content: displayText });
 
-        if (parsed.patch) {
-          HQ.store.patch(function (copy) {
-            return HQ.prompt.applyPatch(copy, parsed.patch);
-          });
-          HQ.store.setUI({ activeTab: 'script' });
-          if (_toast) _toast('Schéma mis à jour', 'ok');
-        }
+        if (callbacks && callbacks.onComplete) callbacks.onComplete(false);
       },
 
       /* onError */ function (err) {
@@ -328,8 +335,62 @@
         inner.textContent = '✗ ' + (err.message || 'Erreur inconnue');
         setStreaming(false);
         _history.pop();
+        if (callbacks && callbacks.onError) callbacks.onError(err);
       }
     );
+  }
+
+  function submitExtraction(request, answers, candidates, callbacks) {
+    var cadrageText = HQ.cadrage.enTexte(answers);
+    var displayText = 'Demande d’extraction : ' + request + '\n\n' + cadrageText;
+    var candidateLines = (candidates || []).map(function (result) {
+      var table = result.table;
+      return '- ' + table.name + (table.description ? ' — ' + table.description.slice(0, 180) : '');
+    });
+    var candidateText = candidateLines.length
+      ? candidateLines.join('\n')
+      : 'Aucune table candidate retournée par la recherche locale.';
+    var userText = displayText + '\n\nTABLES CANDIDATES (recherche locale BM25) :\n' + candidateText;
+    if (_streaming) return;
+
+    if (_inputEl) _inputEl.value = '';
+    appendBubble('user', displayText);
+    _history.push({ role: 'user', content: userText });
+
+    var state = HQ.store.getState();
+    var promptState = Object.assign({}, state, { nodes: [], joins: [] });
+    var system = HQ.prompt.buildSystem(promptState);
+    var messages = HQ.prompt.buildMessages([], userText);
+    var inner = appendBubble('assistant', '', true);
+    setStreaming(true);
+
+    HQ.api.call('plan.design', {
+      system: system,
+      messages: messages,
+      maxTokens: 450,
+      tools: [HQ.tools.OUTIL_PLAN],
+      forceTool: HQ.tools.nomPlan
+    }).then(function (response) {
+      var toolResult = HQ.api.lireToolCall(response, HQ.tools.nomPlan);
+      if (!toolResult) throw new Error('L’IA n’a pas retourné le plan structuré attendu.');
+      var plan = HQ.planner.construirePlan(toolResult, answers, request);
+      HQ.store.patch(function () { return plan; });
+      var summary = HQ.planner.resumer(plan);
+      inner.classList.remove('is-streaming');
+      inner.innerHTML = escHtml(summary).replace(/\n/g, '<br>');
+      _history.push({ role: 'assistant', content: summary });
+      setStreaming(false);
+      HQ.store.setUI({ activeTab: 'script' });
+      if (_toast) _toast('Plan structuré construit — vérifiez-le avant exécution.', 'ok');
+      if (callbacks && callbacks.onComplete) callbacks.onComplete(true);
+    }).catch(function (err) {
+      inner.classList.remove('is-streaming');
+      inner.classList.add('has-error');
+      inner.textContent = '✗ ' + (err.message || 'Erreur inconnue');
+      setStreaming(false);
+      _history.pop();
+      if (callbacks && callbacks.onError) callbacks.onError(err);
+    });
   }
 
   /* ============================================================
@@ -348,8 +409,9 @@
      CONSTRUCTION DU PANNEAU
      ============================================================ */
 
-  function buildPane(toast) {
+  function buildPane(toast, handlers) {
     _toast = toast;
+    _handlers = handlers || {};
 
     var pane = D.byId('pane-chat');
     if (!pane) return;
@@ -359,7 +421,7 @@
 
     _welcomeEl = el('div.chat-bubble.chat-bubble--system', {}, [
       el('div.chat-bubble__inner', {
-        text: 'Décrivez votre extraction PMSI, posez une question, ou utilisez « 8 étapes » pour suivre la méthode du CLAUDE.md.'
+        text: 'Décrivez votre extraction PMSI. Un formulaire local vous aidera à préciser le périmètre avant tout appel à l’IA.'
       })
     ]);
     _listEl.appendChild(_welcomeEl);
@@ -385,8 +447,8 @@
     });
 
     var eightBtn = el('button.btn.btn--ghost.chat-8step', {
-      type: 'button', text: '8 étapes',
-      title: 'Lancer la méthode en 8 étapes du CLAUDE.md'
+      type: 'button', text: 'Cadrage',
+      title: 'Préciser localement les paramètres de l’extraction'
     });
     eightBtn.addEventListener('click', function () {
       var req = (HQ.store.getState().request || _inputEl.value || '').trim();
@@ -395,9 +457,7 @@
         if (_inputEl) _inputEl.focus();
         return;
       }
-      var txt = HQ.prompt.buildEightStepText(req);
-      _inputEl.value = '';
-      sendMessage(txt);
+      if (_handlers.onRequest) _handlers.onRequest(req);
     });
 
     var clearBtn = el('button.btn.btn--ghost.chat-clear', {
@@ -414,7 +474,12 @@
     pane.appendChild(footer);
   }
 
-  function wire(toast) { buildPane(toast); }
+  function wire(toast, handlers) { buildPane(toast, handlers); }
 
-  HQ.renderChat = { wire: wire, reset: reset };
+  HQ.renderChat = {
+    wire: wire,
+    reset: reset,
+    submitExtraction: submitExtraction,
+    isStreaming: function () { return _streaming; }
+  };
 })();

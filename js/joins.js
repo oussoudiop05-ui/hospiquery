@@ -12,13 +12,14 @@
 
   window.HQ = window.HQ || {};
 
-  var TYPES = ['inner', 'left', 'right', 'full', 'anti'];
+  var TYPES = ['inner', 'left', 'right', 'full', 'semi', 'anti'];
 
   var EFFECT = {
     inner: "Ne garde que les lignes trouvées des deux côtés. Les lignes sans correspondance disparaissent.",
     left:  "Garde toutes les lignes de gauche. Quand la droite ne correspond pas, ses colonnes valent NA.",
     right: "Garde toutes les lignes de droite. Quand la gauche ne correspond pas, ses colonnes valent NA.",
     full:  "Garde toutes les lignes des deux côtés, appariées quand c'est possible, NA sinon.",
+    semi:  "Garde les lignes de gauche qui ont au moins une correspondance à droite, sans ajouter les colonnes de droite ni multiplier les lignes.",
     anti:  "Garde les lignes de gauche qui n'ont AUCUNE correspondance à droite. Sert à exclure ; n'ajoute aucune colonne."
   };
 
@@ -193,6 +194,17 @@
     return { columns: columns, extras: extras };
   }
 
+  /* Chemin optimal entre deux noms de table via le graphe (Lot 5) */
+  function trouverChemin(depart, arrivee, sautsMax) {
+    if (!HQ.joingraph) return [];
+    return HQ.joingraph.chemin(depart, arrivee, sautsMax);
+  }
+
+  function preuveLien(depart, arrivee, champDe, champVers) {
+    if (!HQ.joingraph || !HQ.joingraph.preuveLien) return null;
+    return HQ.joingraph.preuveLien(depart, arrivee, champDe, champVers);
+  }
+
   HQ.joins = {
     TYPES: TYPES,
     EFFECT: EFFECT,
@@ -202,6 +214,8 @@
     suggestKeys: suggestKeys,
     findBetween: findBetween,
     orphans: orphans,
-    layout: layout
+    layout: layout,
+    trouverChemin: trouverChemin,
+    preuveLien: preuveLien
   };
 })();

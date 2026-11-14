@@ -75,6 +75,9 @@
       var k = keyCols[n.id] || {};
       return (n.columns || []).filter(function (c) { return c.checked || k[c.name]; });
     }
+    function isSemiTarget(node) {
+      return joins.some(function (join) { return join.to === node.id && join.type === 'semi'; });
+    }
 
     /* jointures qui exigent un copy_to() (CLAUDE.md §8.0.4) : la table de droite
        n'est pas rapatriée en entier, seulement les lignes qui correspondent
@@ -87,9 +90,11 @@
       if (!info) return;
       var both = byId[j.from] && byId[j.to] &&
                  byId[j.from].kind !== 'file' && byId[j.to].kind !== 'file';
-      var semi = j.type === 'inner' || j.type === 'left' || j.type === 'anti';
-      copyJoins.push({ j: j, info: info, semi: !!(both && semi), both: !!both });
-      if (both && semi) deferred[j.to] = true;
+      var semi = j.type === 'inner' || j.type === 'left' || j.type === 'semi' || j.type === 'anti';
+      var sourceDeferred = !!deferred[j.from];
+      var deferSemi = !!(both && semi && !sourceDeferred);
+      copyJoins.push({ j: j, info: info, semi: deferSemi, both: !!both });
+      if (deferSemi) deferred[j.to] = true;
     });
 
     var out = [];
@@ -148,7 +153,7 @@
 
       if (i > 0) readLines.push('');
       readLines.push('## ' + tb + ' — ' + n.name + '  [' + n.source + ']');
-      if (n.multiplier) {
+      if (n.multiplier && !isSemiTarget(n)) {
         readLines.push('## ⚠️  Multiplicateur : ' + n.multiplier.factor);
         readLines.push('## ⚠️  ' + n.multiplier.reason);
       }
@@ -178,7 +183,7 @@
       }
 
       /* dédoublonnage des tables multiplicatrices (CLAUDE.md §6) */
-      if (n.multiplier) {
+      if (n.multiplier && !isSemiTarget(n)) {
         var allNames = checked.map(function (c) { return c.name; }).join(', ');
         readLines.push('');
         readLines.push('# Dédoublonnage (élimine les doublons inter-mouvements)');
@@ -232,7 +237,8 @@
     /* ======= 4. JOINTURES =================================== */
     var typeMap = {
       'inner': 'inner_join', 'left': 'left_join',
-      'right': 'right_join', 'full': 'full_join', 'anti': 'anti_join'
+      'right': 'right_join', 'full': 'full_join',
+      'semi': 'semi_join', 'anti': 'anti_join'
     };
     var joinLines = [];
 
@@ -244,7 +250,7 @@
         ? tbRead[j.from] + (fromNode && fromNode.multiplier ? '_DEDUP' : '')
         : 'TB_J' + ji;
       var toNode   = byId[j.to];
-      var rightTB  = tbRead[j.to] + (toNode && toNode.multiplier ? '_DEDUP' : '');
+      var rightTB  = tbRead[j.to] + (toNode && toNode.multiplier && !isSemiTarget(toNode) ? '_DEDUP' : '');
       var resultTB = 'TB_J' + (ji + 1);
       var joinFn   = typeMap[j.type] || 'left_join';
       var byParts  = j.on.map(function (p) { return '"' + p[0] + '" = "' + p[1] + '"'; });
@@ -383,6 +389,7 @@
     }
 
     nodes.forEach(function (n) {
+      if ((joins || []).some(function (join) { return join.to === n.id && join.type === 'semi'; })) return;
       (n.columns || []).forEach(function (c) {
         if (!c.checked) return;
         var m = merged[n.id] && merged[n.id][c.name];
@@ -450,6 +457,7 @@
     /* SELECT */
     var selects = [];
     nodes.forEach(function (n) {
+      if (joins.some(function (join) { return join.to === n.id && join.type === 'semi'; })) return;
       var a = alias[n.id];
       (n.columns || []).forEach(function (c) {
         if (!c.checked) return;
@@ -465,8 +473,42 @@
     var sql = 'SELECT\n' + selects.join(',\n') + '\nFROM ' +
       (first.schema ? first.schema + '.' : '') + first.name + ' AS ' + alias[first.id];
 
-    /* LEFT JOIN */
+    function filtersFor(node, nodeAlias) {
+      var clauses = [];
+      (node.columns || []).forEach(function (column) {
+        var filter = column.filter && column.filter.trim();
+        if (!filter) return;
+        clauses.push(filter.indexOf('RAW:') === 0
+          ? filter.slice(4).trim()
+          : nodeAlias + '.' + column.name + ' ' + filter);
+      });
+      return clauses;
+    }
+
+    function existsFor(join, parentAlias) {
+      var child = nodes.filter(function (node) { return node.id === join.to; })[0];
+      if (!child) return '';
+      var childAlias = alias[child.id];
+      var conditions = (join.on || []).map(function (pair) {
+        return parentAlias + '.' + pair[0] + ' = ' + childAlias + '.' + pair[1];
+      });
+      conditions = conditions.concat(filtersFor(child, childAlias));
+      joins.forEach(function (next) {
+        if (next.from === child.id && next.type === 'semi') {
+          conditions.push(existsFor(next, childAlias));
+        }
+      });
+      return 'EXISTS (SELECT 1 FROM ' + (child.schema ? child.schema + '.' : '') +
+        child.name + ' AS ' + childAlias + '\n    WHERE ' + conditions.join('\n      AND ') + ')';
+    }
+
+    /* Jointures normales et filtres d'existence (SEMI) */
+    var semiTargets = {};
+    joins.forEach(function (join) {
+      if (join.type === 'semi') semiTargets[join.to] = true;
+    });
     joins.forEach(function (j) {
+      if (j.type === 'semi') return;
       var fromN = nodes.filter(function (n) { return n.id === j.from; })[0];
       var toN   = nodes.filter(function (n) { return n.id === j.to;   })[0];
       if (!fromN || !toN) return;
@@ -480,16 +522,15 @@
 
     /* WHERE */
     var clauses = [];
+    joins.forEach(function (join) {
+      if (join.type !== 'semi') return;
+      if (semiTargets[join.from]) return;
+      var parent = nodes.filter(function (node) { return node.id === join.from; })[0];
+      if (parent) clauses.push(existsFor(join, alias[parent.id]));
+    });
     nodes.forEach(function (n) {
-      (n.columns || []).forEach(function (c) {
-        var f = c.filter && c.filter.trim();
-        if (!f) return;
-        if (f.indexOf('RAW:') === 0) {
-          clauses.push(f.slice(4).trim());
-        } else {
-          clauses.push(alias[n.id] + '.' + c.name + ' ' + f);
-        }
-      });
+      var semiTarget = joins.some(function (join) { return join.to === n.id && join.type === 'semi'; });
+      if (!semiTarget) clauses = clauses.concat(filtersFor(n, alias[n.id]));
     });
     if (clauses.length) {
       sql += '\nWHERE ' + clauses.join('\n  AND ');

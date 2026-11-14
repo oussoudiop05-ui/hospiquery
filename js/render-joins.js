@@ -11,7 +11,7 @@
   var J = HQ.joins;
   var el = D.el, on = D.on;
 
-  var TYPE_LABEL = { inner: 'INNER', left: 'LEFT', right: 'RIGHT', full: 'FULL', anti: 'ANTI' };
+  var TYPE_LABEL = { inner: 'INNER', left: 'LEFT', right: 'RIGHT', full: 'FULL', semi: 'SEMI', anti: 'ANTI' };
 
   /* Après un clic sur une pastille, le schéma est reconstruit :
      on remet le focus sur la même pastille (navigation clavier). */
@@ -75,6 +75,57 @@
     }).join(' · ') || '(clé manquante)';
   }
 
+  function proofInfo(state, join) {
+    var from = nodeById(state, join.from);
+    var to = nodeById(state, join.to);
+    var keys = join.on || [];
+    var weakest = null;
+    var note = '';
+
+    if (!from || !to || !keys.length) {
+      return { proof: 'suppose', note: 'Clé non documentée : à confirmer.' };
+    }
+
+    keys.forEach(function (pair) {
+      var found = J.preuveLien(from.name, to.name, pair[0], pair[1]);
+      if (!found) {
+        weakest = 'suppose';
+        note = 'Au moins une clé de cette jointure n’est pas documentée : à confirmer.';
+        return;
+      }
+      if (!weakest || (found.preuve === 'dict' && weakest === 'ok')) {
+        weakest = found.preuve;
+        note = found.note;
+      }
+    });
+
+    return { proof: weakest || 'suppose', note: note || 'Clé non documentée : à confirmer.' };
+  }
+
+  function proofLabel(proof) {
+    if (proof === 'ok') return { mark: '✅', label: 'validée', cls: 'ok' };
+    if (proof === 'dict') return { mark: '📖', label: 'documentée', cls: 'dict' };
+    return { mark: '❓', label: 'à confirmer', cls: 'suppose' };
+  }
+
+  function makeProofBadge(state, join) {
+    var info = proofInfo(state, join);
+    var label = proofLabel(info.proof);
+    var from = nodeById(state, join.from);
+    var to = nodeById(state, join.to);
+    var badge = el('span.join__proof.join__proof--' + label.cls, {
+      title: info.note,
+      'aria-label': 'Preuve de jointure : ' + label.label,
+      text: label.mark + ' ' + label.label
+    });
+    bindTip(badge, function () {
+      return '<b>Preuve de la jointure</b>' +
+        '<span class="col-tip__type">' + esc(from.name + ' → ' + to.name) + '</span>' +
+        '<span class="col-tip__why">' + esc(info.note) + '</span>';
+    });
+    return badge;
+  }
+
   function makePill(j, idx) {
     var pill = el('button.join__pill.join__pill--' + j.type, {
       type: 'button',
@@ -87,7 +138,7 @@
       return '<b>' + esc((TYPE_LABEL[j.type] || j.type) + ' JOIN') + '</b>' +
         '<span class="col-tip__why">' + esc(J.EFFECT[j.type] || '') + '</span>' +
         (j.note ? '<span class="col-tip__type">' + esc(j.note) + '</span>' : '') +
-        '<span class="col-tip__type">Cliquer : inner → left → right → full → anti</span>';
+        '<span class="col-tip__type">Cliquer : inner → left → right → full → semi → anti</span>';
     });
     return pill;
   }
@@ -129,7 +180,7 @@
     var lineA = el('span.join__line');
     var lineB = el('span.join__line.join__line--arrow');
 
-    var meta = [makePill(j, idx), makeDel(idx)];
+    var meta = [makeProofBadge(state, j), makePill(j, idx), makeDel(idx)];
     var labels = [el('code.join__key', { text: keyText(j) })];
     if (entry.via && prevId && entry.via !== prevId) {
       var viaNode = nodeById(state, entry.via);
@@ -193,7 +244,7 @@
           var a = nodeById(state, x.join.from), b = nodeById(state, x.join.to);
           return el('div.flow-extras__row', {}, [
             el('code.join__key', { text: a.name + ' → ' + b.name + ' : ' + keyText(x.join) }),
-            makePill(x.join, x.joinIdx), makeDel(x.joinIdx)
+            makeProofBadge(state, x.join), makePill(x.join, x.joinIdx), makeDel(x.joinIdx)
           ]);
         }))));
     }
@@ -249,6 +300,10 @@
     chkBranch.checked = hasSpineOut;
     var hint = el('p.field__hint#aj-hint');
     var effect = el('p.field__hint#aj-effect');
+    var pathPreview = el('div.join-proof-path#aj-proof-path', {
+      'aria-live': 'polite',
+      'aria-label': 'Chemin de jointure proposé'
+    });
 
     function target() { return nodeById(state, selTarget.value); }
 
@@ -271,6 +326,30 @@
           ' (table ' + info.tempName + ') sera ajouté automatiquement.'
         : 'Même serveur : jointure directe, pas de copy_to().';
       hint.className = 'field__hint' + (info ? ' field__hint--warn' : '');
+
+      var path = J.trouverChemin(src.name, tgt.name);
+      if (path.length) {
+        var pathItems = path.map(function (step) {
+          var proof = proofLabel(step.preuve);
+          return el('li', {}, [
+            el('span.join__proof.join__proof--' + proof.cls, {
+              text: proof.mark + ' ' + proof.label
+            }),
+            el('span', {
+              text: step.de + '.' + step.cleDe + ' → ' +
+                step.vers + '.' + step.cleVers
+            })
+          ]);
+        });
+        D.replace(pathPreview, [
+          el('p.join-proof-path__title', { text: 'Chemin documenté proposé (' + path.length + ' saut' + (path.length > 1 ? 's' : '') + ')' }),
+          el('ol.join-proof-path__list', {}, pathItems)
+        ]);
+      } else {
+        D.replace(pathPreview, [
+          el('p.join-proof-path__title', { text: '❓ Aucun chemin documenté trouvé — la clé par homonymie reste à confirmer.' })
+        ]);
+      }
     }
 
     function applySuggest() {
@@ -294,6 +373,7 @@
     var body = [
       el('p.field__hint', { text: 'Depuis ' + src.name + '. La clé est proposée par homonymie de colonnes (sans appel réseau) : c\'est une proposition, à valider avant usage.' }),
       field('Table à relier', selTarget, [hint]),
+      pathPreview,
       field('Clé proposée', selSuggest),
       el('div.aj-keys', {}, [
         field('Colonne de ' + src.name, selFrom),
