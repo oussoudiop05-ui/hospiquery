@@ -168,21 +168,24 @@
   ].join('\n');
 
   /* ---- Prompt système -------------------------------------- */
+  /* Retourne { stable, variable } pour le prompt caching Anthropic.
+     - stable   : intro + règles + CLAUDE.md → mis en cache (ne change pas entre messages)
+     - variable : état du schéma + extrait dictionnaire → recalculé à chaque message       */
   function buildSystem(state) {
-    var claudemd   = getClaudemdText();
-    var currentSt  = stateSummary(state);
-    var dict       = dictExcerpt(state ? state.request : '', state ? state.nodes : []);
+    var claudemd  = getClaudemdText();
+    var currentSt = stateSummary(state);
+    var dict      = dictExcerpt(state ? state.request : '', state ? state.nodes : []);
 
-    var parts = [
+    var stableParts = [
       'Tu es l\'assistant DIM/Data Manager de HospiQuery, outil d\'extraction PMSI pour l\'APHM (base HospiTrack, R Studio).',
       HARD_RULES,
       FORMAT_INSTRUCTIONS
     ];
 
     if (claudemd) {
-      parts.push('## CLAUDE.md CHARGÉ\n\n' + claudemd);
+      stableParts.push('## CLAUDE.md CHARGÉ\n\n' + claudemd);
     } else {
-      parts.push([
+      stableParts.push([
         '## CONTEXTE PMSI (CLAUDE.md non chargé)',
         'Tables principales : TB_SEJOUR, TB_DIAG, TB_SYNTH_RSS, TB_SYNTH_RUM, TB_PATIENT, TB_MVT.',
         'Jointures connues : TB_DIAG.ID_SEJOUR = TB_SEJOUR.ID_SEJOUR ; TMVENUE_PL.IEP = TB_SEJOUR.NO_SEJOUR (trimws()).',
@@ -191,10 +194,11 @@
       ].join('\n'));
     }
 
-    parts.push('## ÉTAT ACTUEL DU SCHÉMA\n\n' + currentSt);
-    parts.push('## EXTRAIT DU DICTIONNAIRE (tables pertinentes)\n\n' + dict);
-
-    return parts.join('\n\n---\n\n');
+    return {
+      stable:   stableParts.join('\n\n---\n\n'),
+      variable: '## ÉTAT ACTUEL DU SCHÉMA\n\n' + currentSt
+              + '\n\n---\n\n## EXTRAIT DU DICTIONNAIRE (tables pertinentes)\n\n' + dict
+    };
   }
 
   /* ---- Construction du tableau messages -------------------- */

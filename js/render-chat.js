@@ -12,7 +12,8 @@
 
   /* ---- état local ------------------------------------------ */
   var _history   = [];
-  var _streaming = false;
+  var _streaming  = false;
+  var _rafPending = false;
   var _listEl    = null;
   var _inputEl   = null;
   var _sendBtn   = null;
@@ -31,125 +32,40 @@
       .replace(/"/g, '&quot;');
   }
 
-  function renderInline(text) {
-    var s = escHtml(text);
-    s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
-    s = s.replace(/\*([^*\n]+)\*/g,     '<em>$1</em>');
-    s = s.replace(/`([^`\n]+)`/g,       '<code>$1</code>');
-    return s;
+  /* ---- rendu markdown via marked.js (CDN) ------------------- */
+  var _renderer = null;
+
+  function _buildRenderer() {
+    if (_renderer) return _renderer;
+    _renderer = new marked.Renderer();
+    _renderer.paragraph  = function (text)         { return '<p class="md-p">' + text + '</p>\n'; };
+    _renderer.heading    = function (text, level)  {
+      var l = Math.min(level + 2, 6);
+      return '<h' + l + ' class="md-h">' + text + '</h' + l + '>\n';
+    };
+    _renderer.hr         = function ()             { return '<hr class="md-hr">\n'; };
+    _renderer.blockquote = function (quote)        { return '<blockquote class="md-bq">' + quote + '</blockquote>\n'; };
+    _renderer.list       = function (body, ordered) {
+      var tag = ordered ? 'ol' : 'ul';
+      return '<' + tag + ' class="md-' + tag + '">' + body + '</' + tag + '>\n';
+    };
+    _renderer.code       = function (code, lang) {
+      var cls = lang ? ' class="lang-' + escHtml(lang) + '"' : '';
+      return '<pre class="md-code"><code' + cls + '>' + escHtml(code) + '</code></pre>\n';
+    };
+    _renderer.table      = function (header, body) {
+      return '<table class="md-table"><thead>' + header + '</thead><tbody>' + body + '</tbody></table>\n';
+    };
+    return _renderer;
   }
 
-  function renderMarkdown(text) {
+  function renderMd(text) {
     if (!text) return '';
-    var lines = text.split('\n');
-    var out   = '';
-    var i = 0, n = lines.length;
-
-    while (i < n) {
-      var line = lines[i];
-
-      /* ---- bloc de code ---- */
-      if (/^```/.test(line)) {
-        var lang = line.slice(3).trim();
-        i++;
-        var code = '';
-        while (i < n && !/^```/.test(lines[i])) {
-          code += escHtml(lines[i]) + '\n';
-          i++;
-        }
-        out += '<pre class="md-code"><code' + (lang ? ' class="lang-' + escHtml(lang) + '"' : '') + '>' + code + '</code></pre>';
-        i++;
-        continue;
-      }
-
-      /* ---- règle horizontale ---- */
-      if (/^---+\s*$/.test(line)) {
-        out += '<hr class="md-hr">';
-        i++;
-        continue;
-      }
-
-      /* ---- titres ---- */
-      var hm = line.match(/^(#{1,4})\s+(.+)$/);
-      if (hm) {
-        var hlvl = Math.min(hm[1].length + 2, 6);
-        out += '<h' + hlvl + ' class="md-h">' + renderInline(hm[2]) + '</h' + hlvl + '>';
-        i++;
-        continue;
-      }
-
-      /* ---- citation ---- */
-      if (/^>\s?/.test(line)) {
-        var bqLines = [];
-        while (i < n && /^>\s?/.test(lines[i])) {
-          bqLines.push(lines[i].replace(/^>\s?/, ''));
-          i++;
-        }
-        out += '<blockquote class="md-bq">' + renderMarkdown(bqLines.join('\n')) + '</blockquote>';
-        continue;
-      }
-
-      /* ---- tableau (lookahead : ligne suivante = séparateur) ---- */
-      var isTable = line.includes('|') && i + 1 < n && /^[\s|:=-]+$/.test(lines[i + 1]);
-      if (isTable) {
-        var thdrs = line.split('|').map(function (c) { return c.trim(); }).filter(Boolean);
-        out += '<table class="md-table"><thead><tr>';
-        thdrs.forEach(function (h) { out += '<th>' + renderInline(h) + '</th>'; });
-        out += '</tr></thead><tbody>';
-        i += 2;
-        while (i < n && lines[i].includes('|') && !/^#{1,4}\s/.test(lines[i]) && !/^---/.test(lines[i])) {
-          var tcells = lines[i].split('|').map(function (c) { return c.trim(); }).filter(Boolean);
-          out += '<tr>';
-          tcells.forEach(function (c) { out += '<td>' + renderInline(c) + '</td>'; });
-          out += '</tr>';
-          i++;
-        }
-        out += '</tbody></table>';
-        continue;
-      }
-
-      /* ---- liste non ordonnée ---- */
-      if (/^[-*+]\s+/.test(line)) {
-        out += '<ul class="md-ul">';
-        while (i < n && /^[-*+]\s+/.test(lines[i])) {
-          out += '<li>' + renderInline(lines[i].replace(/^[-*+]\s+/, '')) + '</li>';
-          i++;
-        }
-        out += '</ul>';
-        continue;
-      }
-
-      /* ---- liste ordonnée ---- */
-      if (/^\d+\.\s+/.test(line)) {
-        out += '<ol class="md-ol">';
-        while (i < n && /^\d+\.\s+/.test(lines[i])) {
-          out += '<li>' + renderInline(lines[i].replace(/^\d+\.\s+/, '')) + '</li>';
-          i++;
-        }
-        out += '</ol>';
-        continue;
-      }
-
-      /* ---- ligne vide ---- */
-      if (!line.trim()) { i++; continue; }
-
-      /* ---- paragraphe : lignes consécutives non-spéciales ---- */
-      var paraLines = [];
-      while (i < n && lines[i].trim() &&
-             !/^[#>`*+\-]/.test(lines[i]) &&
-             !/^\d+\./.test(lines[i]) &&
-             !/^```/.test(lines[i]) &&
-             !/^---/.test(lines[i]) &&
-             !(lines[i].includes('|') && i + 1 < n && /^[\s|:=-]+$/.test(lines[i + 1]))) {
-        paraLines.push(lines[i]);
-        i++;
-      }
-      if (paraLines.length) {
-        out += '<p class="md-p">' + renderInline(paraLines.join(' ')) + '</p>';
-      }
+    if (typeof marked !== 'undefined') {
+      return marked.parse(text, { renderer: _buildRenderer(), gfm: true });
     }
-
-    return out;
+    /* fallback sans librairie */
+    return '<p class="md-p">' + escHtml(text).replace(/\n\n+/g, '</p><p class="md-p">') + '</p>';
   }
 
   /* ============================================================
@@ -196,7 +112,7 @@
 
     if (parsed.preamble) {
       var preEl = el('div.qa-preamble', {});
-      preEl.innerHTML = renderMarkdown(parsed.preamble);
+      preEl.innerHTML = renderMd(parsed.preamble);
       container.appendChild(preEl);
     }
 
@@ -213,7 +129,7 @@
       /* Corps */
       if (block.body) {
         var bodyEl = el('div.qa-card__body', {});
-        bodyEl.innerHTML = renderMarkdown(block.body);
+        bodyEl.innerHTML = renderMd(block.body);
         card.appendChild(bodyEl);
       }
 
@@ -305,7 +221,7 @@
       if (role === 'user') {
         inner.textContent = text;
       } else {
-        inner.innerHTML = renderMarkdown(text);
+        inner.innerHTML = renderMd(text);
       }
     }
     if (streaming) inner.classList.add('is-streaming');
@@ -353,8 +269,14 @@
 
       /* onChunk */ function (chunk) {
         fullText += chunk;
-        inner.textContent = fullText;    /* textContent = sûr pendant le streaming */
-        _listEl.scrollTop = _listEl.scrollHeight;
+        if (!_rafPending) {
+          _rafPending = true;
+          requestAnimationFrame(function () {
+            _rafPending = false;
+            inner.textContent = fullText;
+            _listEl.scrollTop = _listEl.scrollHeight;
+          });
+        }
       },
 
       /* onDone */ function () {
@@ -386,7 +308,7 @@
 
           inner.appendChild(qaResult.container);
         } else {
-          inner.innerHTML = renderMarkdown(displayText);
+          inner.innerHTML = renderMd(displayText);
         }
 
         _history.push({ role: 'assistant', content: displayText });

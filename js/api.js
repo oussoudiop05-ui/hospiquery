@@ -43,14 +43,29 @@
   function setSonnetModel(v){ try { localStorage.setItem('hq.sonnetModel', v); } catch(e) {} }
 
   /* ---- stats cumulées ------------------------------------- */
-  var _stats = { calls: 0, inputTokens: 0, outputTokens: 0, costUSD: 0 };
+  var _stats = { calls: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUSD: 0 };
 
-  function _addUsage(model, inp, out) {
+  function _addUsage(model, inp, out, cacheRead, cacheWrite) {
     _stats.calls++;
-    _stats.inputTokens  += inp;
-    _stats.outputTokens += out;
+    _stats.inputTokens      += inp;
+    _stats.outputTokens     += out;
+    _stats.cacheReadTokens  += (cacheRead  || 0);
+    _stats.cacheWriteTokens += (cacheWrite || 0);
     var p = PRICING[model];
-    if (p) _stats.costUSD += (inp * p.in + out * p.out) / 1e6;
+    if (p) {
+      _stats.costUSD += (inp * p.in + out * p.out) / 1e6;
+      /* cache read = 0.1× input, cache write = 1.25× input */
+      _stats.costUSD += ((cacheRead || 0) * p.in * 0.1 + (cacheWrite || 0) * p.in * 1.25) / 1e6;
+    }
+  }
+
+  /* ---- bloc système avec cache_control (Anthropic uniquement) */
+  function _buildSystemBlocks(system) {
+    if (typeof system === 'string') return system;
+    return [
+      { type: 'text', text: system.stable,   cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: system.variable }
+    ];
   }
 
   /* ---- sélection du modèle -------------------------------- */
@@ -86,6 +101,7 @@
       ? { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key }
       : { 'Content-Type': 'application/json', 'x-api-key': key,
           'anthropic-version': ANTHROPIC_VERSION,
+          'anthropic-beta': 'prompt-caching-2024-07-31',
           'anthropic-dangerous-direct-browser-access': 'true' };
 
     var body = isLocal
@@ -93,7 +109,7 @@
           messages: _toOpenAI(opts.system, opts.messages), stream: false }
       : { model: model, max_tokens: opts.maxTokens || 1024,
           messages: opts.messages, stream: false };
-    if (!isLocal && opts.system) body.system = opts.system;
+    if (!isLocal && opts.system) body.system = _buildSystemBlocks(opts.system);
 
     var attempt = 0;
     function tryOnce() {
@@ -113,7 +129,9 @@
             var out = isLocal
               ? (data.usage && data.usage.completion_tokens) || 0
               : (data.usage && data.usage.output_tokens)     || 0;
-            _addUsage(model, inp, out);
+            var cacheRead  = isLocal ? 0 : (data.usage && data.usage.cache_read_input_tokens)    || 0;
+            var cacheWrite = isLocal ? 0 : (data.usage && data.usage.cache_creation_input_tokens) || 0;
+            _addUsage(model, inp, out, cacheRead, cacheWrite);
             return data;
           });
         })
@@ -143,6 +161,7 @@
       ? { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key }
       : { 'Content-Type': 'application/json', 'x-api-key': key,
           'anthropic-version': ANTHROPIC_VERSION,
+          'anthropic-beta': 'prompt-caching-2024-07-31',
           'anthropic-dangerous-direct-browser-access': 'true' };
 
     var body = isLocal
@@ -150,7 +169,7 @@
           messages: _toOpenAI(opts.system, opts.messages), stream: true }
       : { model: model, max_tokens: opts.maxTokens || 2048,
           messages: opts.messages, stream: true };
-    if (!isLocal && opts.system) body.system = opts.system;
+    if (!isLocal && opts.system) body.system = _buildSystemBlocks(opts.system);
 
     fetch(endpoint, { method: 'POST', headers: hdrs, body: JSON.stringify(body) })
       .then(function(r) {
@@ -161,12 +180,12 @@
         }
         var reader  = r.body.getReader();
         var decoder = new TextDecoder('utf-8');
-        var inp = 0, out = 0;
+        var inp = 0, out = 0, cacheRead = 0, cacheWrite = 0;
 
         function read() {
           return reader.read().then(function(result) {
             if (result.done) {
-              _addUsage(model, inp, out);
+              _addUsage(model, inp, out, cacheRead, cacheWrite);
               if (onDone) onDone();
               return;
             }
@@ -191,7 +210,9 @@
                     onChunk && onChunk(ev.delta.text);
                   }
                   if (ev.type === 'message_start' && ev.message && ev.message.usage) {
-                    inp = ev.message.usage.input_tokens || 0;
+                    inp        = ev.message.usage.input_tokens                  || 0;
+                    cacheRead  = ev.message.usage.cache_read_input_tokens       || 0;
+                    cacheWrite = ev.message.usage.cache_creation_input_tokens   || 0;
                   }
                   if (ev.type === 'message_delta' && ev.usage) {
                     out = ev.usage.output_tokens || 0;
@@ -209,8 +230,11 @@
 
   /* ---- conversion system+messages → format OpenAI --------- */
   function _toOpenAI(system, messages) {
+    var sysText = !system ? ''
+      : typeof system === 'string' ? system
+      : (system.stable || '') + '\n\n---\n\n' + (system.variable || '');
     var out = [];
-    if (system) out.push({ role: 'system', content: system });
+    if (sysText) out.push({ role: 'system', content: sysText });
     (messages || []).forEach(function(m) { out.push(m); });
     return out;
   }
@@ -227,7 +251,7 @@
     getSonnetModel: getSonnetModel,
     setSonnetModel: setSonnetModel,
     getStats:       function() { return Object.assign({}, _stats); },
-    resetStats:     function() { _stats = { calls: 0, inputTokens: 0, outputTokens: 0, costUSD: 0 }; },
+    resetStats:     function() { _stats = { calls: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUSD: 0 }; },
     ROUTES:         ROUTES
   };
 })();
