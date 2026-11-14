@@ -188,6 +188,20 @@
         })()
       ]),
       el('section.settings-section', {}, [
+        el('h3.settings-heading', { text: 'Contexte PMSI envoyé à l\'API' }),
+        (function () {
+          var chk = document.createElement('input');
+          chk.type = 'checkbox';
+          chk.id   = 'settings-full-claudemd';
+          try { chk.checked = localStorage.getItem('hq.fullClaudemd') === '1'; } catch(e) {}
+          var lbl = document.createElement('label');
+          lbl.setAttribute('for', 'settings-full-claudemd');
+          lbl.textContent = 'Envoyer le CLAUDE.md complet (coûteux)';
+          return el('div.settings-checkbox', {}, [chk, lbl]);
+        })(),
+        el('p.field-hint', { text: 'Par défaut : noyau distillé (~3 500 tokens, −88 %). Mode complet : CLAUDE.md entier (~30 000 tokens). Ne change rien si le CLAUDE.md n\'est pas chargé.' })
+      ]),
+      el('section.settings-section', {}, [
         el('h3.settings-heading', { text: 'Routage des modèles' }),
         el('p.field-hint', { text: 'Opus n\'est jamais utilisé. Haiku pour les tâches mécaniques, Sonnet pour le raisonnement.' }),
         routeTable
@@ -213,6 +227,14 @@
       HQ.api.setKey(key);
       HQ.api.setEndpoint(ep);
       if (smEl) HQ.api.setSonnetModel(smEl.value);
+
+      var fullModeEl = body && body.querySelector('#settings-full-claudemd');
+      if (fullModeEl) {
+        try {
+          if (fullModeEl.checked) localStorage.setItem('hq.fullClaudemd', '1');
+          else localStorage.removeItem('hq.fullClaudemd');
+        } catch(e) {}
+      }
 
       /* mettre à jour le chip #val-settings si présent */
       var valEl = document.getElementById('val-settings');

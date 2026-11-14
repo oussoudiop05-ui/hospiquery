@@ -167,14 +167,22 @@
     '- TB_DIAG granularité = le MOUVEMENT (ID_MVT = lien principal), pas le séjour.'
   ].join('\n');
 
+  /* ---- mode complet (localStorage) ------------------------- */
+  function getFullMode() {
+    try { return localStorage.getItem('hq.fullClaudemd') === '1'; } catch(e) { return false; }
+  }
+
   /* ---- Prompt système -------------------------------------- */
   /* Retourne { stable, variable } pour le prompt caching Anthropic.
-     - stable   : intro + règles + CLAUDE.md → mis en cache (ne change pas entre messages)
-     - variable : état du schéma + extrait dictionnaire → recalculé à chaque message       */
+     - stable   : intro + règles + contexte PMSI → mis en cache
+     - variable : état du schéma + extrait dictionnaire → recalculé à chaque message
+     Par défaut, utilise HQ.NOYAU_PMSI (~3 500 tokens).
+     Si "mode complet" activé et CLAUDE.md chargé, envoie le CLAUDE.md complet (~30 000 tokens). */
   function buildSystem(state) {
     var claudemd  = getClaudemdText();
     var currentSt = stateSummary(state);
     var dict      = dictExcerpt(state ? state.request : '', state ? state.nodes : []);
+    var useFullMode = getFullMode();
 
     var stableParts = [
       'Tu es l\'assistant DIM/Data Manager de HospiQuery, outil d\'extraction PMSI pour l\'APHM (base HospiTrack, R Studio).',
@@ -182,7 +190,11 @@
       FORMAT_INSTRUCTIONS
     ];
 
-    if (claudemd) {
+    if (useFullMode && claudemd) {
+      stableParts.push('## CLAUDE.md CHARGÉ\n\n' + claudemd);
+    } else if (HQ.NOYAU_PMSI) {
+      stableParts.push('## CONTEXTE PMSI (noyau)\n\n' + HQ.NOYAU_PMSI);
+    } else if (claudemd) {
       stableParts.push('## CLAUDE.md CHARGÉ\n\n' + claudemd);
     } else {
       stableParts.push([
