@@ -60,15 +60,19 @@
     });
   }
 
-  function avertissements(noeuds, joins) {
+  function avertissements(noeuds, joins, grain) {
     var result = [];
     noeuds.forEach(function (node) {
+      var multiplierIsRequestedGrain =
+        grain === 'acte' && node.name === 'TB_ACTE' ||
+        grain === 'diagnostic' && node.name === 'TB_DIAG' ||
+        grain === 'rum' && node.name === 'TB_SYNTH_RUM';
       var existenceOnly = (joins || []).some(function (join) {
         return join.to === node.id && join.type === 'semi';
       }) && !(joins || []).some(function (join) {
         return join.to === node.id && join.type !== 'semi';
       });
-      if (node.multiplier && !existenceOnly) {
+      if (node.multiplier && !existenceOnly && !multiplierIsRequestedGrain) {
         result.push({
           level: 'warn',
           text: node.name + ' multiplie les lignes (' + node.multiplier.factor + ') — '

@@ -29,7 +29,7 @@
       var f = col.filter && col.filter.trim();
       if (!f) return;
       if (f.indexOf('RAW:') === 0) {
-        out.push(f.slice(4).trim());        /* condition SQL brute */
+        out.push(f.slice(4).trim().replace(/@([A-Za-z_][A-Za-z0-9_]*)@/g, '$1')); /* condition SQL brute */
       } else {
         out.push(col.name + ' ' + f);       /* col LIKE 'X%' | col IN (...) */
       }
@@ -46,6 +46,7 @@
     var nodes    = state.nodes;
     var joins    = state.joins    || [];
     var derived  = state.derived  || [];
+    var aggregation = state.aggregation || null;
     var warnings = state.warnings || [];
 
     /* index nodes par id */
@@ -294,6 +295,50 @@
     } else {
       calcLines.push('TB_CALC <- ' + lastTB);
     }
+    if (aggregation) {
+      var groupBy = aggregation.groupBy || [];
+      var summaries = aggregation.summaries || [];
+      if (!Array.isArray(groupBy) || !Array.isArray(summaries) ||
+          groupBy.some(function (name) { return !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name); }) ||
+          summaries.some(function (summary) {
+            return !/^[A-Za-z_][A-Za-z0-9_]*$/.test(summary.name || '') ||
+              (summary.column && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(summary.column)) ||
+              ['mean', 'sum', 'min', 'max', 'count', 'n_distinct'].indexOf(summary.operation) < 0 ||
+              (summary.operation !== 'count' && !summary.column);
+          })) {
+        throw new Error('Agrégation invalide dans le plan.');
+      }
+      var having = aggregation.having || [];
+      if (!Array.isArray(having) || having.some(function (condition) {
+        return !/^[A-Za-z_][A-Za-z0-9_]*$/.test(condition.column || '') ||
+          ['=', '>', '>=', '<', '<='].indexOf(condition.operator) < 0 ||
+          !/^\d+(?:\.\d+)?$/.test(String(condition.value));
+      })) throw new Error('Condition HAVING invalide dans le plan.');
+      if (!summaries.length) throw new Error('L’agrégation ne contient aucune mesure.');
+      var aggregateLines = [];
+      if (groupBy.length) aggregateLines.push('  group_by(' + groupBy.join(', ') + ') %>%');
+      aggregateLines.push('  summarise(');
+      var aggregateParts = summaries.map(function (summary) {
+        var expression = summary.operation === 'count' && !summary.column ? 'n()'
+          : summary.operation === 'count' ? 'sum(!is.na(' + summary.column + '))'
+          : summary.operation === 'n_distinct' ? 'n_distinct(' + summary.column + ')'
+            : summary.operation + '(' + summary.column + ', na.rm = TRUE)';
+        return summary.name + ' = ' + expression;
+      });
+      aggregateParts.push('.groups = "drop"');
+      aggregateParts.forEach(function (part, index) {
+        aggregateLines.push('    ' + part + (index < aggregateParts.length - 1 ? ',' : ''));
+      });
+      aggregateLines.push('  )');
+      calcLines.push('TB_CALC <- TB_CALC %>%');
+      calcLines = calcLines.concat(aggregateLines);
+      if (having.length) {
+        calcLines.push('TB_CALC <- TB_CALC %>%');
+        calcLines.push('  filter(' + having.map(function (condition) {
+          return condition.column + ' ' + condition.operator + ' ' + condition.value;
+        }).join(', ') + ')');
+      }
+    }
     out.push(sec('5. Colonnes calculées', calcLines.join('\n')));
 
     /* ======= 6. TABLE FINALE ================================ */
@@ -313,19 +358,35 @@
     out.push(sec('6. Table finale', finalLines.join('\n')));
 
     /* ======= 7. CONTRÔLES QUALITÉ ============================= */
-    out.push(sec('7. Contrôles qualité', [
+    var qualityLines = [
       'cat("=== CONTROLES QUALITE ===\\n")',
-      'cat("Nb lignes      :", nrow(TB_FINAL), "\\n")',
-      'cat("ID_SEJOUR uniq :", n_distinct(TB_FINAL$ID_SEJOUR), "\\n")',
-      '',
-      '# Doublons sur la clé principale',
-      'doublons <- TB_FINAL %>% group_by(ID_SEJOUR) %>% filter(n() > 1) %>% ungroup()',
-      'if (nrow(doublons) > 0) {',
-      '  cat("\\u26a0\\ufe0f DOUBLONS :", nrow(doublons), "lignes\\n"); print(head(doublons, 5))',
-      '} else { cat("\\u2713 Aucun doublon\\n") }',
-      '',
-      'glimpse(TB_FINAL)',
-    ].join('\n')));
+      'cat("Nb lignes      :", nrow(TB_FINAL), "\\n")'
+    ];
+    var qualityKeys = {
+      '1 ligne = 1 séjour': ['ID_SEJOUR'],
+      '1 ligne = 1 acte': ['ID_SEJOUR', 'CODE_ACTE', 'DATE_ACTE'],
+      '1 ligne = 1 diagnostic': ['ID_SEJOUR', 'CODE_DIAG', 'TYPE_DIAG'],
+      '1 ligne = 1 RUM': ['ID_SEJOUR', 'ID_UNITE_MEDICALE'],
+      '1 ligne = 1 RSS': ['ID_RSS'],
+      '1 ligne = 1 patient': ['ID_PATIENT']
+    }[state.granularity] || [];
+    var finalNames = finalColumns(state).map(function (column) { return column.name; });
+    if (qualityKeys.length && qualityKeys.every(function (name) { return finalNames.indexOf(name) >= 0; })) {
+      var keyArgs = qualityKeys.join(', ');
+      qualityLines.push(
+        'cat("Clés distinctes :", nrow(distinct(TB_FINAL, ' + keyArgs + ')), "\\n")',
+        '',
+        '# Contrôle des doublons sur la clé du grain demandé',
+        'doublons <- TB_FINAL %>% group_by(' + keyArgs + ') %>% filter(n() > 1) %>% ungroup()',
+        'if (nrow(doublons) > 0) {',
+        '  cat("\\u26a0\\ufe0f DOUBLONS :", nrow(doublons), "lignes\\n"); print(head(doublons, 5))',
+        '} else { cat("\\u2713 Aucun doublon\\n") }'
+      );
+    } else {
+      qualityLines.push('# Contrôle d’unicité ignoré : la clé du grain demandé n’est pas dans le résultat.');
+    }
+    qualityLines.push('', 'glimpse(TB_FINAL)');
+    out.push(sec('7. Contrôles qualité', qualityLines.join('\n')));
 
     /* ======= 8. EXPORT (commenté) =============================== */
     out.push(sec('8. Export (décommenter au besoin)', [
@@ -409,22 +470,51 @@
       });
     });
 
-    derived.forEach(function (d) {
-      var origin = d.origin === 'created' || d.origin === 'aggregated' ? d.origin : 'modified';
-      var src = byIdN[d.from];
-      var entry = { name: d.name, origin: origin, nodeId: d.from || '', nodeName: src ? src.name : '',
-                    col: d.col || '', label: '', expr: d.expr || '', why: d.why || '',
-                    renamedFrom: '', collision: false };
-      if (origin === 'modified' && d.col && seen[d.col] !== undefined) {
-        /* la version modifiée remplace sa source, à la même place */
-        var at = seen[d.col];
-        delete seen[d.col];
-        list[at] = entry;
-        seen[d.name] = at;
-        return;
-      }
-      push(entry);
-    });
+    var aggregation = state && state.aggregation;
+    if (aggregation) {
+      list = [];
+      seen = {};
+      (aggregation.groupBy || []).forEach(function (name) {
+        var source = nodes.filter(function (node) {
+          return (node.columns || []).some(function (column) {
+            return column.name === name && column.checked;
+          });
+        })[0];
+        if (!source) throw new Error('Colonne de regroupement absente du résultat : ' + name);
+        var column = findCol(source, name);
+        push({
+          name: (column.alias && column.alias.trim()) || name, origin: 'kept',
+          nodeId: source.id, nodeName: source.name, col: name,
+          label: column.label || '', expr: '', why: 'Colonne de regroupement.',
+          renamedFrom: '', collision: false
+        });
+      });
+      (aggregation.summaries || []).forEach(function (summary) {
+        push({
+          name: summary.name, origin: 'aggregated', nodeId: '', nodeName: '',
+          col: summary.column || '', label: summary.label || '',
+          expr: summary.operation + (summary.column ? '(' + summary.column + ')' : '()'),
+          why: summary.why || 'Mesure agrégée selon la recette.',
+          renamedFrom: '', collision: false
+        });
+      });
+    } else {
+      derived.forEach(function (d) {
+        var origin = d.origin === 'created' || d.origin === 'aggregated' ? d.origin : 'modified';
+        var src = byIdN[d.from];
+        var entry = { name: d.name, origin: origin, nodeId: d.from || '', nodeName: src ? src.name : '',
+                      col: d.col || '', label: '', expr: d.expr || '', why: d.why || '',
+                      renamedFrom: '', collision: false };
+        if (origin === 'modified' && d.col && seen[d.col] !== undefined) {
+          var at = seen[d.col];
+          delete seen[d.col];
+          list[at] = entry;
+          seen[d.name] = at;
+          return;
+        }
+        push(entry);
+      });
+    }
 
     /* ordre : finalOrder d'abord, puis le reste */
     /* un nom de l'ordre enregistré peut viser l'ancien nom d'une colonne
@@ -456,16 +546,51 @@
 
     /* SELECT */
     var selects = [];
-    nodes.forEach(function (n) {
-      if (joins.some(function (join) { return join.to === n.id && join.type === 'semi'; })) return;
-      var a = alias[n.id];
-      (n.columns || []).forEach(function (c) {
-        if (!c.checked) return;
-        var col = a + '.' + c.name;
-        if (c.alias) col += ' AS ' + c.alias;
-        selects.push('    ' + col);
+    var aggregation = state.aggregation;
+    if (aggregation) {
+      var groupBy = aggregation.groupBy || [];
+      var summaries = aggregation.summaries || [];
+      if (!Array.isArray(groupBy) || !Array.isArray(summaries) ||
+          groupBy.some(function (name) { return !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name); }) ||
+          summaries.some(function (summary) {
+            return !/^[A-Za-z_][A-Za-z0-9_]*$/.test(summary.name || '') ||
+              (summary.column && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(summary.column)) ||
+              ['mean', 'sum', 'min', 'max', 'count', 'n_distinct'].indexOf(summary.operation) < 0 ||
+              (summary.operation !== 'count' && !summary.column);
+          })) throw new Error('Agrégation invalide dans le plan SQL.');
+      groupBy.forEach(function (name) {
+        var source = nodes.filter(function (node) {
+          return (node.columns || []).some(function (column) { return column.name === name; });
+        })[0];
+        if (!source) throw new Error('Colonne de regroupement absente : ' + name);
+        selects.push('    ' + alias[source.id] + '.' + name);
       });
-    });
+      summaries.forEach(function (summary) {
+        var operation = summary.operation;
+        var source = summary.column && nodes.filter(function (node) {
+          return (node.columns || []).some(function (column) { return column.name === summary.column; });
+        })[0];
+        if (summary.column && !source) throw new Error('Colonne de mesure absente : ' + summary.column);
+        var columnRef = source ? alias[source.id] + '.' + summary.column : '';
+        var expression = operation === 'count' && !summary.column ? 'COUNT(*)'
+          : operation === 'count' ? 'COUNT(' + columnRef + ')'
+            : operation === 'n_distinct' ? 'COUNT(DISTINCT ' + columnRef + ')'
+              : ({ mean: 'AVG', sum: 'SUM', min: 'MIN', max: 'MAX' }[operation] || operation) +
+                '(' + columnRef + ')';
+        selects.push('    ' + expression + ' AS ' + summary.name);
+      });
+    } else {
+      nodes.forEach(function (n) {
+        if (joins.some(function (join) { return join.to === n.id && join.type === 'semi'; })) return;
+        var a = alias[n.id];
+        (n.columns || []).forEach(function (c) {
+          if (!c.checked) return;
+          var col = a + '.' + c.name;
+          if (c.alias) col += ' AS ' + c.alias;
+          selects.push('    ' + col);
+        });
+      });
+    }
     if (!selects.length) selects = ['    *'];
 
     /* FROM */
@@ -479,7 +604,7 @@
         var filter = column.filter && column.filter.trim();
         if (!filter) return;
         clauses.push(filter.indexOf('RAW:') === 0
-          ? filter.slice(4).trim()
+          ? filter.slice(4).trim().replace(/@([A-Za-z_][A-Za-z0-9_]*)@/g, nodeAlias + '.$1')
           : nodeAlias + '.' + column.name + ' ' + filter);
       });
       return clauses;
@@ -534,6 +659,38 @@
     });
     if (clauses.length) {
       sql += '\nWHERE ' + clauses.join('\n  AND ');
+    }
+    if (aggregation && aggregation.groupBy && aggregation.groupBy.length) {
+      sql += '\nGROUP BY ' + aggregation.groupBy.map(function (name) {
+        var source = nodes.filter(function (node) {
+          return (node.columns || []).some(function (column) { return column.name === name; });
+        })[0];
+        return alias[source.id] + '.' + name;
+      }).join(', ');
+    }
+    if (aggregation && aggregation.having && aggregation.having.length) {
+      sql += '\nHAVING ' + aggregation.having.map(function (condition) {
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(condition.column || '') ||
+            ['=', '>', '>=', '<', '<='].indexOf(condition.operator) < 0 ||
+            !/^\d+(?:\.\d+)?$/.test(String(condition.value))) {
+          throw new Error('Condition HAVING invalide dans le plan SQL.');
+        }
+        var summary = (aggregation.summaries || []).filter(function (item) {
+          return item.name === condition.column;
+        })[0];
+        if (!summary) throw new Error('Mesure HAVING absente : ' + condition.column);
+        var source = summary.column && nodes.filter(function (node) {
+          return (node.columns || []).some(function (column) { return column.name === summary.column; });
+        })[0];
+        if (summary.column && !source) throw new Error('Colonne de mesure absente : ' + summary.column);
+        var columnRef = source ? alias[source.id] + '.' + summary.column : '';
+        var expression = summary.operation === 'count' && !summary.column ? 'COUNT(*)'
+          : summary.operation === 'count' ? 'COUNT(' + columnRef + ')'
+            : summary.operation === 'n_distinct' ? 'COUNT(DISTINCT ' + columnRef + ')'
+              : ({ mean: 'AVG', sum: 'SUM', min: 'MIN', max: 'MAX' }[summary.operation] ||
+                summary.operation) + '(' + columnRef + ')';
+        return expression + ' ' + condition.operator + ' ' + condition.value;
+      }).join('\n  AND ');
     }
 
     return sql + '\n;';

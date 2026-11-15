@@ -11,6 +11,75 @@
   var D = HQ.dom;
   var el = D.el;
 
+  var MOIS = {
+    janvier: 1, fevrier: 2, mars: 3, avril: 4, mai: 5, juin: 6,
+    juillet: 7, aout: 8, septembre: 9, octobre: 10, novembre: 11, decembre: 12
+  };
+
+  function normalizeQuery(value) {
+    return String(value || '').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').replace(/[’']/g, ' ');
+  }
+
+  function dateStamp(year, month, day) {
+    return String(year) + String(month).padStart(2, '0') + String(day).padStart(2, '0');
+  }
+
+  function parseYearFromQuery(query) {
+    var q = normalizeQuery(query);
+    var currentYear = new Date().getFullYear();
+    var match;
+
+    if (/\bl annee derniere\b|\bl an dernier\b/.test(q)) {
+      return { dateDebut: dateStamp(currentYear - 1, 1, 1), dateFin: dateStamp(currentYear - 1, 12, 31) };
+    }
+    if (/\bcette annee\b|\ben cours\b/.test(q)) {
+      return { dateDebut: dateStamp(currentYear, 1, 1), dateFin: dateStamp(currentYear, 12, 31) };
+    }
+    if (/\b12 derniers? mois\b/.test(q)) {
+      var end = new Date();
+      var start = new Date(end.getTime());
+      start.setFullYear(start.getFullYear() - 1);
+      return {
+        dateDebut: dateStamp(start.getFullYear(), start.getMonth() + 1, start.getDate()),
+        dateFin: dateStamp(end.getFullYear(), end.getMonth() + 1, end.getDate())
+      };
+    }
+
+    match = q.match(/\b(?:au|durant le|durant|pendant le|pendant|de|entre)\s+(?:premier|1er|1e|1)\s+trimestre\s+(20\d{2})\b/);
+    if (match) return { dateDebut: match[1] + '0101', dateFin: match[1] + '0331' };
+    match = q.match(/\b(?:au|durant|pendant)\s+(?:deuxieme|2e|2eme|2)\s+trimestre\s+(20\d{2})\b/);
+    if (match) return { dateDebut: match[1] + '0401', dateFin: match[1] + '0630' };
+    match = q.match(/\b(?:au|durant|pendant)\s+(?:troisieme|3e|3eme|3)\s+trimestre\s+(20\d{2})\b/);
+    if (match) return { dateDebut: match[1] + '0701', dateFin: match[1] + '0930' };
+    match = q.match(/\b(?:au|durant|pendant)\s+(?:quatrieme|4e|4eme|4)\s+trimestre\s+(20\d{2})\b/);
+    if (match) return { dateDebut: match[1] + '1001', dateFin: match[1] + '1231' };
+
+    var monthNames = Object.keys(MOIS).join('|');
+    match = q.match(new RegExp('\\bentre\\s+(' + monthNames + ')\\s+et\\s+(' + monthNames + ')\\s+(20\\d{2})\\b'));
+    if (match) {
+      var firstMonth = MOIS[match[1]], lastMonth = MOIS[match[2]], year = Number(match[3]);
+      if (firstMonth <= lastMonth) {
+        return {
+          dateDebut: dateStamp(year, firstMonth, 1),
+          dateFin: dateStamp(year, lastMonth, new Date(year, lastMonth, 0).getDate())
+        };
+      }
+    }
+
+    match = q.match(/\b(?:entre|de|en)\s+(20\d{2})\s*(?:et|a|-)\s*(20\d{2})\b/);
+    if (match && Number(match[1]) <= Number(match[2])) {
+      return { dateDebut: match[1] + '0101', dateFin: match[2] + '1231' };
+    }
+
+    match = q.match(/\b(?:en|annee)\s*(20\d{2})\b/) || q.match(/\b(20\d{2})\b/);
+    if (match) {
+      var singleYear = match[1] || match[0];
+      return { dateDebut: singleYear + '0101', dateFin: singleYear + '1231' };
+    }
+    return null;
+  }
+
   var QUESTIONS = [
     {
       id: 'bornes',
@@ -27,7 +96,7 @@
       id: 'periode',
       libelle: 'Période',
       type: 'dates',
-      defaut: { debut: '20230101', fin: '20261231' }
+      defaut: { debut: '', fin: '' }
     },
     {
       id: 'champ',
@@ -171,10 +240,16 @@
   }
 
   function renderForm(request) {
+    var detectedPeriod = parseYearFromQuery(request);
     var questions = QUESTIONS.map(function (question) {
-      if (question.id !== 'bornes') return question;
       var copy = Object.assign({}, question);
-      if (/\b(acte|actes|ccam|chirurg|intervention|opératoire)\b/i.test(request || '')) {
+      if (question.id === 'periode' && detectedPeriod) {
+        copy.defaut = { debut: detectedPeriod.dateDebut, fin: detectedPeriod.dateFin };
+      }
+      if (question.id === 'granularite' && HQ.planner && HQ.planner.detecterGrain) {
+        copy.defaut = HQ.planner.detecterGrain(request);
+      }
+      if (question.id === 'bornes' && /\b(acte|actes|ccam|chirurg\w*|intervention|oper\w*)\b/.test(normalizeQuery(request))) {
         copy.defaut = 'acte';
       }
       return copy;
@@ -288,6 +363,7 @@
 
   HQ.cadrage = {
     QUESTIONS: QUESTIONS,
+    parseYearFromQuery: parseYearFromQuery,
     renderForm: renderForm,
     validate: validate,
     showError: showError,

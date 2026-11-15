@@ -13,6 +13,11 @@
     sejour: 'séjour',
     rss: 'RSS',
     rum: 'RUM',
+    um: 'UM',
+    uf: 'UF',
+    pole: 'pôle',
+    ghm: 'GHM',
+    dms: 'DMS par GHM',
     diagnostic: 'diagnostic',
     acte: 'acte',
     patient: 'patient'
@@ -26,6 +31,16 @@
     TB_ACTE: '1 ligne = 1 acte'
   };
   var CHAMPS_CODE = { CIM10: 'CODE_DIAG', CCAM: 'CODE_ACTE', GHM: 'CODE_GHM', CMD: 'CODE_CMD' };
+
+  function detecterGrain(requete) {
+    var text = String(requete || '').normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (/\b(tous|toutes|liste|detail|details|chaque)\s+(?:(?:les?|des)\s+)?actes?\b|\bpar\s+acte\b|\bactes?\s+(?:de\s+)?(?:realises|effectues|ccam|chirurg\w*)\b/.test(text)) return 'acte';
+    if (/\bpar\s+patient\b|\bliste\s+des\s+patients\b|\bchaque\s+patient\b|\bpatients?\s+uniques\b|\bdedoublonn?e?\b|\b1\s+ligne\s+par\s+patient\b/.test(text)) return 'patient';
+    if (/\bpar\s+(?:um|uf|unite)\b|\bchaque\s+um\b|\bsejour.{0,30}\bum\b|\bum.{0,30}\bsejour\b/.test(text)) return 'rum';
+    if (/\b(tous|toutes|liste|chaque)\s+(?:(?:les?|des)\s+)?diagnostics?\b|\bpar\s+diagnostic\b/.test(text)) return 'diagnostic';
+    return 'sejour';
+  }
 
   function tableName(name) {
     return String(name || '').trim().toUpperCase();
@@ -109,6 +124,65 @@
     column.checked = true;
   }
 
+  function applyTrustedFilters(nodes, filters, warnings) {
+    (filters || []).forEach(function (filter) {
+      if (filter.source === 'ccam-adc' && filter.table === 'TB_ACTE' && filter.colonne === 'CODE_ACTE') {
+        var reference = HQ.ccamChirurgie;
+        if (!reference || reference.size !== 4698 || !Array.isArray(reference.codes) ||
+            reference.codes.length !== reference.size ||
+            reference.codes.some(function (code) { return !/^[A-Z0-9]{7}$/.test(code); })) {
+          throw new Error('Le référentiel national CCAM ADC est absent ou invalide.');
+        }
+        var node = findNode(nodes, 'TB_ACTE');
+        var column = node && node.columns.filter(function (item) { return item.name === 'CODE_ACTE'; })[0];
+        if (!column) {
+          warnings.push({ level: 'warn', text: 'Filtre CCAM ADC non appliqué : TB_ACTE.CODE_ACTE est absent du plan.' });
+          return;
+        }
+        var groups = [];
+        for (var i = 0; i < reference.codes.length; i += 500) {
+          var values = reference.codes.slice(i, i + 500).map(function (code) { return "'" + code + "'"; });
+          groups.push('CODE_ACTE IN (' + values.join(', ') + ')');
+        }
+        column.filter = 'RAW:(' + groups.join(' OR ') + ')';
+        column.checked = true;
+        return;
+      }
+
+      var trustedConditions = {
+        'hors-borne': {
+          table: 'TB_SYNTH_RSS',
+          columns: ['BORNE_BASSE', 'NB_JOUR_EXB'],
+          sql: "(@BORNE_BASSE@ = 'O' OR @NB_JOUR_EXB@ > 0)"
+        },
+        'sejours-bloque': {
+          table: 'TB_SEJOUR',
+          columns: ['STATUT', 'ETAT_FACTURATION'],
+          sql: "(@STATUT@ = 'T' OR @ETAT_FACTURATION@ = 'R')"
+        }
+      };
+      var trusted = trustedConditions[filter.source];
+      if (!trusted || filter.table !== trusted.table || filter.colonne !== '*') {
+        warnings.push({ level: 'warn', text: 'Filtre SQL spécialisé ignoré : source non reconnue.' });
+        return;
+      }
+      if (!trusted.columns.every(function (name) { return HQ.dictionary.getField(trusted.table, name); })) {
+        warnings.push({ level: 'warn', text: 'Filtre métier ' + filter.source + ' non appliqué : une colonne manque dans le dictionnaire.' });
+        return;
+      }
+      var node = findNode(nodes, trusted.table);
+      var column = node && node.columns.filter(function (item) {
+        return item.name === trusted.columns[0];
+      })[0];
+      if (!column) {
+        warnings.push({ level: 'warn', text: 'Filtre métier ' + filter.source + ' non appliqué : table absente du plan.' });
+        return;
+      }
+      column.filter = 'RAW:' + trusted.sql;
+      column.checked = false;
+    });
+  }
+
   function sqlLiteral(value) {
     var text = String(value == null ? '' : value).trim();
     if (text.length >= 2 && text.charAt(0) === "'" && text.charAt(text.length - 1) === "'") {
@@ -135,7 +209,7 @@
       }
       return 'BETWEEN ' + sqlLiteral(bounds[0]) + ' AND ' + sqlLiteral(bounds[1]);
     }
-    if (['=', 'LIKE', '>=', '<='].indexOf(op) < 0) {
+    if (['=', '<>', 'LIKE', '>=', '<='].indexOf(op) < 0) {
       throw new Error('Opérateur de filtre non autorisé : ' + operator);
     }
     return op + ' ' + sqlLiteral(text);
@@ -296,8 +370,18 @@
       selected.push({ nom: name, role: item.role, pourquoi: item.pourquoi || '' });
     });
     if (!selected.length) throw new Error('Aucune table valide dans le plan proposé.');
-    if (sortieOutil.granularite === 'sejour') {
-      var stayIndex = selected.map(function (entry) { return entry.nom; }).indexOf('TB_SEJOUR');
+    var detectedGrain = detecterGrain(requete);
+    var grain = sortieOutil.aggregation && sortieOutil.granularite ||
+      cadrage && cadrage.granularite ||
+      (detectedGrain !== 'sejour' ? detectedGrain : sortieOutil.granularite || detectedGrain);
+    sortieOutil.granularite = grain;
+    var grainTables = {
+      sejour: 'TB_SEJOUR', acte: 'TB_ACTE', diagnostic: 'TB_DIAG',
+      rum: 'TB_SYNTH_RUM', rss: 'TB_SYNTH_RSS', patient: 'TB_PATIENT'
+    };
+    var grainTable = grainTables[grain];
+    if (grainTable) {
+      var stayIndex = selected.map(function (entry) { return entry.nom; }).indexOf(grainTable);
       if (stayIndex > 0) selected.unshift(selected.splice(stayIndex, 1)[0]);
     }
 
@@ -348,6 +432,15 @@
     relevantFilters.forEach(function (filter) {
       (requiredByTable[filter.table] = requiredByTable[filter.table] || []).push(filter.colonne);
     });
+    (sortieOutil.filtres_sql || []).forEach(function (filter) {
+      if (filter.source === 'ccam-adc' && filter.table === 'TB_ACTE' && filter.colonne === 'CODE_ACTE') {
+        (requiredByTable.TB_ACTE = requiredByTable.TB_ACTE || []).push('CODE_ACTE');
+      } else if (filter.source === 'hors-borne' && filter.table === 'TB_SYNTH_RSS') {
+        (requiredByTable.TB_SYNTH_RSS = requiredByTable.TB_SYNTH_RSS || []).push('BORNE_BASSE', 'NB_JOUR_EXB');
+      } else if (filter.source === 'sejours-bloque' && filter.table === 'TB_SEJOUR') {
+        (requiredByTable.TB_SEJOUR = requiredByTable.TB_SEJOUR || []).push('STATUT', 'ETAT_FACTURATION');
+      }
+    });
 
     var nodes = selected.map(function (entry, index) {
       var node = metadata(entry.nom, 'n' + (index + 1), entry.role, entry.pourquoi, requiredByTable[entry.nom]);
@@ -393,9 +486,8 @@
 
     var semiEdges = {};
     selected.filter(function (entry) { return entry.role === 'filtre'; }).forEach(function (entry) {
-      semiPath(graphEdges, selected[0].nom, entry.nom).forEach(function (index) {
-        semiEdges[index] = true;
-      });
+      var path = semiPath(graphEdges, selected[0].nom, entry.nom);
+      if (path.length) semiEdges[path[path.length - 1]] = true;
     });
 
     var joins = graphEdges.map(function (edge) {
@@ -418,10 +510,11 @@
     });
 
     relevantFilters.forEach(function (filter) { addFilter(nodes, warnings, filter); });
+    applyTrustedFilters(nodes, sortieOutil.filtres_sql, warnings);
     applyDateRange(nodes, cadrage, warnings);
     HQ.rules.appliquerFiltresObligatoires(nodes, cadrage);
     applyCadrageRules(nodes, cadrage, warnings, relevantFilters);
-    warnings = warnings.concat(HQ.rules.avertissements(nodes, joins));
+    warnings = warnings.concat(HQ.rules.avertissements(nodes, joins, sortieOutil.granularite));
     joins.forEach(function (join) {
       if (join.type !== 'semi') return;
       var target = nodes.filter(function (node) { return node.id === join.to; })[0];
@@ -432,6 +525,9 @@
     if (!granularity) throw new Error('Granularité inconnue : ' + sortieOutil.granularite);
     if (sortieOutil.granularite === 'sejour' && selected[0].nom !== 'TB_SEJOUR') {
       warnings.push({ level: 'warn', text: 'Le plan demande une ligne par séjour sans table de départ TB_SEJOUR : l’unicité ne peut pas être garantie.' });
+    }
+    if (sortieOutil.granularite === 'patient' && selected[0].nom !== 'TB_PATIENT') {
+      warnings.push({ level: 'warn', text: 'Le grain patient ne peut pas être garanti sans TB_PATIENT comme table de départ.' });
     }
     if (sortieOutil.granularite === 'sejour' && joins.some(function (join) {
       var target = nodes.filter(function (node) { return node.id === join.to; })[0];
@@ -446,6 +542,7 @@
       nodes: nodes,
       joins: joins,
       derived: [],
+      aggregation: sortieOutil.aggregation || null,
       finalOrder: [],
       warnings: warnings
     };
@@ -477,5 +574,5 @@
     return lines.join('\n');
   }
 
-  HQ.planner = { construirePlan: construirePlan, resumer: resumer };
+  HQ.planner = { construirePlan: construirePlan, resumer: resumer, detecterGrain: detecterGrain };
 })();

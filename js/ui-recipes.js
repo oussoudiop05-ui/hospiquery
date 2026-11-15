@@ -26,7 +26,7 @@
     return values;
   }
 
-  function parameterField(parameter) {
+  function parameterField(parameter, request) {
     var name = 'recipe-' + parameter.nom;
     if (parameter.type === 'multi') {
       return el('fieldset.cadrage-question', {}, [
@@ -52,10 +52,15 @@
     }
 
     var inputType = parameter.type === 'nombre' ? 'number' : 'text';
+    var defaultValue = parameter.defaut || '';
+    if (parameter.extraireCIM) {
+      var codes = String(request || '').toUpperCase().match(/\b[A-Z]\d{2}(?:\.\d{1,2})?\b/g) || [];
+      if (codes.length) defaultValue = Array.from(new Set(codes)).join(',');
+    }
     var input = el('input.input', {
       type: inputType,
       name: name,
-      value: parameter.defaut || '',
+      value: defaultValue,
       placeholder: parameter.type === 'date' ? 'AAAAMMJJ' : '',
       'aria-label': parameter.libelle
     });
@@ -72,19 +77,14 @@
     }
     var recipe = match.recette;
     var cadrageForm = HQ.cadrage.renderForm(request);
-    if (recipe.granulariteFixe) {
+    if (recipe.granularite === 'acte' && HQ.planner.detecterGrain(request) === 'sejour' &&
+        !/\bsejours?\b/i.test(String(request || ''))) {
       var grainSelect = cadrageForm.querySelector('select[name="granularite"]');
-      if (grainSelect) {
-        grainSelect.value = recipe.granulariteFixe;
-        grainSelect.disabled = true;
-        grainSelect.parentNode.appendChild(el('p.cadrage-help', {
-          text: 'Cette recette produit une ligne par séjour pour éviter les doublons liés aux actes multiples.'
-        }));
-      }
+      if (grainSelect) grainSelect.value = 'acte';
     }
     var parameterForm = el('form.recipe-params', {
       'aria-label': 'Paramètres de la recette ' + recipe.libelle
-    }, recipe.parametres.map(parameterField));
+    }, recipe.parametres.map(function (parameter) { return parameterField(parameter, request); }));
     var error = el('p.cadrage-error', { role: 'alert', hidden: true });
     var body = el('div.recipe-dialog', {}, [
       el('p.cadrage-intro', {
@@ -119,8 +119,8 @@
         if (parameters.date && !/^\d{8}$/.test(parameters.date)) {
           throw new Error('La date doit respecter le format AAAAMMJJ.');
         }
-        var output = recipe.construire(parameters, cadrage.values);
-        output.granularite = cadrage.values.granularite;
+        var output = recipe.construire(parameters, cadrage.values, request);
+        if (!output.aggregation) output.granularite = cadrage.values.granularite;
         _closeModal();
         if (callbacks && callbacks.onSubmit) callbacks.onSubmit(recipe, output, cadrage.values);
       } catch (e) {
